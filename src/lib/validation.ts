@@ -53,6 +53,4 @@ export const applicationSchema = z.object({
   expertise: z.array(z.string().max(60)).max(30),
   availability: z.string().trim().max(60),
   referral: z.string().trim().max(200).nullable(),
-  writing: z.string().max(5000),
-  answers: z.array(z.coerce.number().int()).max(20), // graded server-side
 });

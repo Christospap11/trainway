@@ -5,7 +5,6 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { prisma } from "@/lib/prisma";
 import { applicationSchema } from "@/lib/validation";
 import { hit, clientIp } from "@/lib/rate-limit";
-import { gradeAssessment } from "@/lib/assessment";
 
 export type ApplyInput = {
   fullName: string;
@@ -16,18 +15,13 @@ export type ApplyInput = {
   expertise: string[];
   availability: string;
   referral: string | null;
-  writing: string;
-  answers: number[]; // raw assessment answers — graded server-side
 };
 
 export type ApplyResult = {
   ok: boolean;
   error?: string;
-  status?: "APPROVED" | "PENDING";
+  status?: "APPROVED";
 };
-
-// Assessment score at/above this auto-approves; below goes to admin review.
-const AUTO_APPROVE_SCORE = 70;
 
 export async function submitApplication(
   input: ApplyInput,
@@ -43,8 +37,6 @@ export async function submitApplication(
   }
   input = parsed.data;
   const email = input.email.trim().toLowerCase();
-  // grade the assessment SERVER-SIDE — never trust a client score
-  const score = gradeAssessment(input.answers);
 
   // 1. Create the auth account (email pre-confirmed so they can sign in now).
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -72,9 +64,8 @@ export async function submitApplication(
       .join("")
       .toUpperCase() || "T";
 
-  const approved = score >= AUTO_APPROVE_SCORE;
-
-  // 2. Create the profile + application rows.
+  // 2. Create the profile + application rows. Everyone is approved on signup —
+  // skill gating happens per-project via qualification quizzes, not here.
   try {
     await prisma.user.create({
       data: {
@@ -82,7 +73,7 @@ export async function submitApplication(
         email,
         name: input.fullName,
         role: "TRAINER",
-        status: approved ? "APPROVED" : "PENDING",
+        status: "APPROVED",
         tier: "Trainer",
         country: input.country,
         languages: input.languages,
@@ -98,9 +89,7 @@ export async function submitApplication(
             expertise: input.expertise,
             availability: input.availability,
             referral: input.referral,
-            assessmentScore: score,
-            writingSample: input.writing,
-            status: approved ? "APPROVED" : "PENDING",
+            status: "APPROVED",
           },
         },
       },
@@ -111,11 +100,9 @@ export async function submitApplication(
     return { ok: false, error: "Could not save your application. Please retry." };
   }
 
-  // 3. Sign in immediately ONLY if auto-approved; pending applicants wait for review.
-  if (approved) {
-    const supabase = await createSupabaseServerClient();
-    await supabase.auth.signInWithPassword({ email, password: input.password });
-  }
+  // 3. Sign in immediately — approved accounts go straight to the dashboard.
+  const supabase = await createSupabaseServerClient();
+  await supabase.auth.signInWithPassword({ email, password: input.password });
 
-  return { ok: true, status: approved ? "APPROVED" : "PENDING" };
+  return { ok: true, status: "APPROVED" };
 }

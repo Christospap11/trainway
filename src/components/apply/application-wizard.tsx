@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { submitApplication } from "@/app/apply/actions";
 import {
   Check,
   ArrowLeft,
   ArrowRight,
-  ShieldCheck,
   PenLine,
   Code2,
   Scale,
@@ -16,12 +14,12 @@ import {
   Sigma,
   Sparkles,
 } from "lucide-react";
-import { Input, Textarea, Select, FieldLabel } from "@/components/ui/input";
+import { Input, Select, FieldLabel } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 /* ──────────────────────────────────────────────────────────── data ── */
 
-const STEPS = ["Account", "Profile", "Agreements", "Assessment"] as const;
+const STEPS = ["Account", "Profile", "Agreements"] as const;
 
 const LANGUAGES = [
   "Greek",
@@ -45,10 +43,6 @@ const EXPERTISE = [
   { key: "creative", label: "Creative", icon: Sparkles },
 ];
 
-// Questions come from the server (answer key stays server-side); this is just
-// the client-facing shape.
-type AssessmentQuestion = { q: string; options: string[] };
-
 type FormState = {
   fullName: string;
   email: string;
@@ -61,8 +55,6 @@ type FormState = {
   referral: string;
   agreeNda: boolean;
   agreeContractor: boolean;
-  answers: Record<number, number>;
-  writing: string;
 };
 
 const initialState: FormState = {
@@ -77,22 +69,15 @@ const initialState: FormState = {
   referral: "",
   agreeNda: false,
   agreeContractor: false,
-  answers: {},
-  writing: "",
 };
 
 /* ─────────────────────────────────────────────────────── component ── */
 
-export function ApplicationWizard({
-  assessment,
-}: {
-  assessment: AssessmentQuestion[];
-}) {
+export function ApplicationWizard() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [data, setData] = useState<FormState>(initialState);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<null | "approved" | "review">(null);
   const [submitting, setSubmitting] = useState(false);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -130,12 +115,6 @@ export function ApplicationWizard({
       if (!data.agreeNda || !data.agreeContractor)
         return "You must accept both agreements to continue.";
     }
-    if (step === 3) {
-      if (Object.keys(data.answers).length < assessment.length)
-        return "Please answer every question.";
-      if (data.writing.trim().length < 80)
-        return "Your writing sample should be at least 80 characters.";
-    }
     return null;
   }
 
@@ -151,9 +130,7 @@ export function ApplicationWizard({
       return;
     }
 
-    // final step → send the RAW answers; the server grades + decides approval
-    const answers = assessment.map((_, i) => data.answers[i] ?? -1);
-
+    // final step → create the account; everyone is approved immediately.
     setSubmitting(true);
     let res;
     try {
@@ -166,8 +143,6 @@ export function ApplicationWizard({
         expertise: data.expertise,
         availability: data.availability,
         referral: data.referral || null,
-        writing: data.writing,
-        answers,
       });
     } catch {
       setSubmitting(false);
@@ -181,17 +156,14 @@ export function ApplicationWizard({
       return;
     }
 
-    // auto-approved → straight into the dashboard; otherwise → under review
-    if (res.status === "APPROVED") router.push("/dashboard");
-    else setResult("review");
+    // signed in server-side → straight into the dashboard.
+    router.push("/dashboard");
   }
 
   function back() {
     setError(null);
     setStep((s) => Math.max(0, s - 1));
   }
-
-  if (result) return <ResultScreen result={result} firstName={data.fullName} />;
 
   return (
     <div>
@@ -200,7 +172,7 @@ export function ApplicationWizard({
           Become a trainer
         </h1>
         <p className="mt-1.5 text-muted">
-          Takes about 10 minutes. Free to apply.
+          Takes about 2 minutes. Free to join — start right away.
         </p>
       </div>
 
@@ -212,7 +184,6 @@ export function ApplicationWizard({
           <ProfileStep data={data} set={set} toggleArray={toggleArray} />
         )}
         {step === 2 && <AgreementsStep data={data} set={set} />}
-        {step === 3 && <AssessmentStep data={data} set={set} assessment={assessment} />}
 
         {error && (
           <p className="mt-5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
@@ -238,7 +209,7 @@ export function ApplicationWizard({
             {submitting
               ? "Creating your account…"
               : step === STEPS.length - 1
-                ? "Submit application"
+                ? "Create account"
                 : "Continue"}
             {!submitting && (
               <ArrowRight
@@ -508,79 +479,6 @@ function AgreementsStep({ data, set }: StepProps) {
   );
 }
 
-function AssessmentStep({
-  data,
-  set,
-  assessment,
-}: StepProps & { assessment: AssessmentQuestion[] }) {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-medium">Skills assessment</h2>
-        <p className="mt-1 text-sm text-muted">
-          A short check of reading, reasoning, and writing. You need a high score
-          to be approved.
-        </p>
-      </div>
-
-      {assessment.map((q, qi) => (
-        <div key={qi}>
-          <p className="mb-2.5 text-sm font-medium">
-            {qi + 1}. {q.q}
-          </p>
-          <div className="space-y-2">
-            {q.options.map((opt, oi) => {
-              const selected = data.answers[qi] === oi;
-              return (
-                <button
-                  key={oi}
-                  type="button"
-                  onClick={() => set("answers", { ...data.answers, [qi]: oi })}
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-xl border px-4 py-2.5 text-left text-sm transition-colors",
-                    selected
-                      ? "border-primary/50 bg-primary/10 text-foreground"
-                      : "border-ink/10 bg-ink/5 text-muted hover:text-foreground",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[11px]",
-                      selected
-                        ? "border-primary bg-primary text-white"
-                        : "border-ink/20",
-                    )}
-                  >
-                    {String.fromCharCode(65 + oi)}
-                  </span>
-                  {opt}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-
-      <div>
-        <FieldLabel htmlFor="writing">
-          Writing sample — why does a clear, well-written answer matter when
-          training an AI model?
-        </FieldLabel>
-        <Textarea
-          id="writing"
-          rows={4}
-          value={data.writing}
-          onChange={(e) => set("writing", e.target.value)}
-          placeholder="Write 2–3 sentences…"
-        />
-        <p className="mt-1.5 text-right text-xs text-muted">
-          {data.writing.trim().length} / 80 characters minimum
-        </p>
-      </div>
-    </div>
-  );
-}
-
 /* ───────────────────────────────────────────────────────── helpers ── */
 
 function AgreementBox({
@@ -618,62 +516,5 @@ function CheckboxControl({
     >
       {checked && <Check size={14} />}
     </button>
-  );
-}
-
-function ResultScreen({
-  result,
-  firstName,
-}: {
-  result: "approved" | "review";
-  firstName: string;
-}) {
-  const name = firstName.trim().split(" ")[0] || "there";
-  const approved = result === "approved";
-
-  return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
-      <div
-        className={cn(
-          "grid h-16 w-16 place-items-center rounded-2xl text-white",
-          approved
-            ? "bg-gradient-to-br from-brand-indigo via-brand-violet to-brand-fuchsia shadow-[0_0_40px_-6px_rgba(139,92,246,0.8)]"
-            : "bg-ink/10",
-        )}
-      >
-        {approved ? <Check size={32} /> : <ShieldCheck size={32} />}
-      </div>
-
-      <h1 className="mt-6 text-3xl font-semibold tracking-tight">
-        {approved
-          ? `Welcome aboard, ${name}! 🎉`
-          : "Application received"}
-      </h1>
-      <p className="mt-3 max-w-md text-muted">
-        {approved
-          ? "You passed the assessment and your account is approved. You can log in and start qualifying for projects right away."
-          : "Thanks for applying! Our team is reviewing your assessment. We'll email you within 2–3 business days with the result."}
-      </p>
-
-      {approved ? (
-        <Link
-          href="/login"
-          className="group mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-fuchsia px-7 font-medium text-white shadow-[0_8px_30px_-6px_rgba(139,92,246,0.6)] transition-all hover:-translate-y-0.5"
-        >
-          Log in to your dashboard
-          <ArrowRight
-            size={18}
-            className="transition-transform group-hover:translate-x-1"
-          />
-        </Link>
-      ) : (
-        <Link
-          href="/"
-          className="mt-8 inline-flex h-12 items-center justify-center rounded-full border border-ink/15 bg-ink/5 px-7 font-medium transition-colors hover:bg-ink/10"
-        >
-          Back to home
-        </Link>
-      )}
-    </div>
   );
 }
