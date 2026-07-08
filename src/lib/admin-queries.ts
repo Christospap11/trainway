@@ -135,8 +135,18 @@ export async function listSubmissionBatches() {
       orderBy: { createdAt: "asc" },
     });
     const items = subs.map((s) => {
-      const ans = s.data as { rating?: number; choice?: string; rationale?: string };
-      const answer = s.task.kind === "RATING" ? `Rated ${ans.rating ?? "—"}/5` : `Chose ${ans.choice ?? "—"}`;
+      const ans = s.data as {
+        rating?: number;
+        ratings?: Record<string, number>;
+        choice?: string;
+        rationale?: string;
+        feedback?: string;
+      };
+      const overall = ans.ratings?.overall ?? ans.rating;
+      const answer =
+        s.task.kind === "RATING"
+          ? `Overall ${overall ?? "—"}/5`
+          : `Chose ${ans.choice ?? "—"}`;
       const goldPass =
         s.task.isGold && s.task.goldAnswer != null
           ? passesGold(s.task.kind, s.data, s.task.goldAnswer)
@@ -146,7 +156,7 @@ export async function listSubmissionBatches() {
         kind: s.task.kind,
         isGold: s.task.isGold,
         answer,
-        rationale: ans.rationale ?? "",
+        rationale: ans.feedback ?? ans.rationale ?? "",
         goldPass,
       };
     });

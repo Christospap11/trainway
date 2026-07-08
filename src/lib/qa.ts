@@ -15,10 +15,16 @@ export type BatchEarning = {
 
 // Score a gold submission against its answer key.
 export function passesGold(kind: string, data: unknown, gold: unknown): boolean {
-  const d = (data ?? {}) as { rating?: unknown; choice?: unknown };
+  const d = (data ?? {}) as {
+    rating?: unknown;
+    ratings?: { overall?: unknown };
+    choice?: unknown;
+  };
   const g = (gold ?? {}) as { min?: number; max?: number; choice?: string };
   if (kind === "RATING") {
-    const r = Number(d.rating);
+    // multi-dimension ratings are gold-checked on the `overall` score;
+    // fall back to the legacy single `rating` for older submissions.
+    const r = Number(d.ratings?.overall ?? d.rating);
     const min = typeof g.min === "number" ? g.min : 1;
     const max = typeof g.max === "number" ? g.max : 5;
     return Number.isFinite(r) && r >= min && r <= max;

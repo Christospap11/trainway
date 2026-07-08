@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   X,
-  Star,
   Flag,
   SkipForward,
   ArrowRight,
@@ -26,7 +25,17 @@ type Project = {
   payRate: string;
 };
 
-const RATING_ISSUES = ["Inaccurate", "Unsafe", "Off-topic", "Poor grammar"];
+// The five rating dimensions a trainer scores 1–5 for a response.
+// `overall` is the dimension gold-QA checks against the task's acceptable range.
+const RATING_DIMENSIONS = [
+  { key: "safety", label: "Harmlessness", hint: "Safe — no harmful, dangerous, or offensive content" },
+  { key: "promptFollowing", label: "Prompt following", hint: "Actually addresses what the user asked" },
+  { key: "accuracy", label: "Accuracy", hint: "Factually correct — no made-up info or hallucinations" },
+  { key: "humanLike", label: "Human-like", hint: "Reads like a natural, fluent human answer — right tone & terms" },
+  { key: "overall", label: "Overall quality", hint: "How good the response is as a whole" },
+] as const;
+
+const FEEDBACK_MIN = 20;
 const FLAG_REASONS = ["Broken / unreadable", "Offensive content", "Unclear prompt"];
 
 function fmtTime(total: number) {
@@ -55,8 +64,8 @@ export function TaskWorkspace({
   const [submitting, setSubmitting] = useState(false);
 
   // per-task answer state
-  const [rating, setRating] = useState(0);
-  const [issues, setIssues] = useState<string[]>([]);
+  const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [feedback, setFeedback] = useState("");
   const [choice, setChoice] = useState<"A" | "tie" | "B" | null>(null);
   const [rationale, setRationale] = useState("");
   const [writingResponse, setWritingResponse] = useState("");
@@ -79,8 +88,8 @@ export function TaskWorkspace({
   const hasMore = index + 1 < tasks.length;
 
   const resetAnswer = useCallback(() => {
-    setRating(0);
-    setIssues([]);
+    setRatings({});
+    setFeedback("");
     setChoice(null);
     setRationale("");
     setWritingResponse("");
@@ -136,9 +145,15 @@ export function TaskWorkspace({
 
   const submit = useCallback(() => {
     if (!task) return;
-    if (task.kind === "rating" && rating === 0) {
-      setNotice("Please give a star rating before submitting.");
-      return;
+    if (task.kind === "rating") {
+      if (RATING_DIMENSIONS.some((d) => !ratings[d.key])) {
+        setNotice("Please rate all five questions (1–5) before submitting.");
+        return;
+      }
+      if (feedback.trim().length < FEEDBACK_MIN) {
+        setNotice(`Please add feedback of at least ${FEEDBACK_MIN} characters.`);
+        return;
+      }
     }
     if (task.kind === "comparison" && choice === null) {
       setNotice("Please choose which response is better.");
@@ -150,12 +165,12 @@ export function TaskWorkspace({
     }
     const data =
       task.kind === "rating"
-        ? { rating, issues, rationale }
+        ? { ratings, feedback: feedback.trim() }
         : task.kind === "comparison"
           ? { choice, rationale }
           : { response: writingResponse.trim(), rationale };
     persist("completed", data);
-  }, [task, rating, issues, choice, rationale, writingResponse, persist]);
+  }, [task, ratings, feedback, choice, rationale, writingResponse, persist]);
 
   const skip = useCallback(() => persist("skipped"), [persist]);
   const flag = useCallback(
@@ -177,10 +192,6 @@ export function TaskWorkspace({
       if (tag === "TEXTAREA" || tag === "INPUT" || phase !== "task") return;
       if (!task) return;
 
-      if (task.kind === "rating" && ["1", "2", "3", "4", "5"].includes(e.key)) {
-        setRating(Number(e.key));
-        setNotice(null);
-      }
       if (task.kind === "comparison") {
         if (e.key === "1") setChoice("A");
         if (e.key === "2") setChoice("tie");
@@ -365,11 +376,11 @@ export function TaskWorkspace({
             <div className="border-t border-ink/10 px-4 py-3 text-sm text-muted">
               {kind === "rating" ? (
                 <p>
-                  Read the prompt and the AI&apos;s response, then rate its
-                  overall quality from 1–5 stars. Flag any issues and add a short
-                  rationale. <br />
+                  Read the prompt and the AI&apos;s response, then rate it on each
+                  of the five questions from 1 (worst) to 5 (best), and leave
+                  feedback explaining your scores. <br />
                   <span className="text-foreground/80">
-                    Shortcuts: 1–5 to rate · Enter to submit.
+                    Enter submits once every question is answered.
                   </span>
                 </p>
               ) : kind === "comparison" ? (
@@ -405,17 +416,16 @@ export function TaskWorkspace({
         {task.kind === "rating" && (
           <RatingTask
             response={task.response}
-            rating={rating}
-            setRating={(n) => {
-              setRating(n);
+            ratings={ratings}
+            setRating={(key, n) => {
+              setRatings((r) => ({ ...r, [key]: n }));
               setNotice(null);
             }}
-            issues={issues}
-            toggleIssue={(v) =>
-              setIssues((arr) =>
-                arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v],
-              )
-            }
+            feedback={feedback}
+            setFeedback={(v) => {
+              setFeedback(v);
+              setNotice(null);
+            }}
           />
         )}
 
@@ -452,11 +462,12 @@ export function TaskWorkspace({
           </div>
         )}
 
-        {/* rationale (not shown for writing — the response is the answer) */}
-        {task.kind !== "writing" && (
+        {/* rationale — comparison only (rating has its own required feedback;
+            writing's response IS the answer) */}
+        {task.kind === "comparison" && (
           <div className="mt-5">
             <div className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted">
-              Rationale {task.kind === "comparison" && "(why?)"}
+              Rationale (why?)
             </div>
             <Textarea
               rows={3}
@@ -540,17 +551,18 @@ export function TaskWorkspace({
 
 function RatingTask({
   response,
-  rating,
+  ratings,
   setRating,
-  issues,
-  toggleIssue,
+  feedback,
+  setFeedback,
 }: {
   response: string;
-  rating: number;
-  setRating: (n: number) => void;
-  issues: string[];
-  toggleIssue: (v: string) => void;
+  ratings: Record<string, number>;
+  setRating: (key: string, n: number) => void;
+  feedback: string;
+  setFeedback: (v: string) => void;
 }) {
+  const fbLen = feedback.trim().length;
   return (
     <>
       <div className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted">
@@ -560,55 +572,69 @@ function RatingTask({
         {response}
       </div>
 
-      <div className="mt-5">
-        <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
-          Overall quality
+      <div className="mt-6 space-y-5">
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-medium uppercase tracking-wider text-muted">
+            Rate this response
+          </div>
+          <div className="text-xs text-muted">1 = worst · 5 = best</div>
         </div>
-        <div className="flex items-center gap-2">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              onClick={() => setRating(n)}
-              aria-label={`${n} stars`}
-              className="transition-transform hover:scale-110"
-            >
-              <Star
-                size={30}
-                className={
-                  n <= rating ? "fill-amber-400 text-amber-400" : "text-ink/20"
-                }
-              />
-            </button>
-          ))}
-          {rating > 0 && (
-            <span className="ml-2 text-sm text-muted">{rating} / 5</span>
-          )}
-        </div>
+
+        {RATING_DIMENSIONS.map((dim, i) => {
+          const value = ratings[dim.key] ?? 0;
+          return (
+            <div key={dim.key}>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium">
+                  {i + 1}. {dim.label}
+                </span>
+                <span className="text-xs text-muted">
+                  {value ? `${value} / 5` : "—"}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-muted">{dim.hint}</p>
+              <div className="mt-2 flex gap-1.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setRating(dim.key, n)}
+                    aria-label={`${dim.label}: ${n}`}
+                    className={cn(
+                      "h-10 flex-1 rounded-lg border text-sm font-medium transition-colors",
+                      value === n
+                        ? "border-primary/60 bg-primary/15 text-foreground"
+                        : "border-ink/10 bg-ink/5 text-muted hover:text-foreground",
+                    )}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      <div className="mt-5">
-        <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
-          Issues (if any)
+      <div className="mt-6">
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <span className="text-xs font-medium uppercase tracking-wider text-muted">
+            Feedback <span className="text-red-300">*</span>
+          </span>
+          <span
+            className={cn(
+              "text-xs",
+              fbLen >= FEEDBACK_MIN ? "text-emerald-300" : "text-muted",
+            )}
+          >
+            {fbLen} / {FEEDBACK_MIN} minimum
+          </span>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {RATING_ISSUES.map((issue) => {
-            const on = issues.includes(issue);
-            return (
-              <button
-                key={issue}
-                onClick={() => toggleIssue(issue)}
-                className={cn(
-                  "rounded-full border px-3.5 py-1.5 text-sm transition-colors",
-                  on
-                    ? "border-red-500/40 bg-red-500/10 text-red-300"
-                    : "border-ink/10 bg-ink/5 text-muted hover:text-foreground",
-                )}
-              >
-                {issue}
-              </button>
-            );
-          })}
-        </div>
+        <Textarea
+          rows={3}
+          value={feedback}
+          onChange={(e) => setFeedback(e.target.value)}
+          placeholder="Explain your scores — what is good or wrong with this response?"
+        />
       </div>
     </>
   );

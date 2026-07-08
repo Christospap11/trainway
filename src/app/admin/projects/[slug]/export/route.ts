@@ -51,15 +51,28 @@ export async function GET(
   const headers = [
     "submitted_at", "trainer", "email", "kind", "is_gold", "prompt",
     "response", "response_a", "response_b",
-    "trainer_response", "rating", "choice", "rationale", "issues",
+    "trainer_response",
+    "rating_harmlessness", "rating_prompt_following", "rating_accuracy",
+    "rating_human_like", "rating_overall",
+    "choice", "feedback",
     "status", "earned_usd",
   ];
 
   const lines = [headers.join(",")];
   for (const s of subs) {
-    const ans = s.data as { rating?: number; choice?: string; rationale?: string; issues?: string[]; response?: string };
+    const ans = s.data as {
+      rating?: number;
+      ratings?: Record<string, number>;
+      choice?: string;
+      rationale?: string;
+      feedback?: string;
+      response?: string;
+    };
     const td = s.task.data as { response?: string; responseA?: string; responseB?: string };
     const cents = earnMap.get(s.batchId ?? "") ?? 0;
+    // per-dimension rating; older single-rating submissions surface as `overall`
+    const r = ans.ratings ?? {};
+    const overall = r.overall ?? ans.rating ?? "";
     lines.push(
       [
         s.createdAt.toISOString(),
@@ -72,10 +85,13 @@ export async function GET(
         td.responseA ?? "",
         td.responseB ?? "",
         ans.response ?? "", // what the trainer wrote (writing tasks)
-        ans.rating ?? "",
+        r.safety ?? "",
+        r.promptFollowing ?? "",
+        r.accuracy ?? "",
+        r.humanLike ?? "",
+        overall,
         ans.choice ?? "",
-        ans.rationale ?? "",
-        Array.isArray(ans.issues) ? ans.issues.join("; ") : "",
+        ans.feedback ?? ans.rationale ?? "",
         s.status,
         (cents / 100).toFixed(2),
       ].map(esc).join(","),
