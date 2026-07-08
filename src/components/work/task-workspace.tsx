@@ -7,7 +7,6 @@ import {
   Flag,
   SkipForward,
   ArrowRight,
-  Check,
   ChevronDown,
   Keyboard,
   PartyPopper,
@@ -36,6 +35,32 @@ const RATING_DIMENSIONS = [
 ] as const;
 
 const FEEDBACK_MIN = 20;
+
+// Side-by-side comparison: each question is answered on a 5-point A↔B scale.
+const COMPARISON_DIMENSIONS = [
+  { key: "accuracy", label: "Clinical accuracy", hint: "Which is more medically correct and evidence-based" },
+  { key: "safety", label: "Safety", hint: "Which better avoids harm — flags red flags, says when to seek care" },
+  { key: "completeness", label: "Completeness", hint: "Which more fully covers key points, caveats, and next steps" },
+  { key: "clarity", label: "Clarity & tone", hint: "Which is clearer and more appropriate for a patient" },
+  { key: "overall", label: "Overall preference", hint: "Which response is better overall" },
+] as const;
+
+const PREFERENCE_OPTIONS = [
+  { key: "strong_a", label: "Strongly A" },
+  { key: "slight_a", label: "Slightly A" },
+  { key: "tie", label: "Tie" },
+  { key: "slight_b", label: "Slightly B" },
+  { key: "strong_b", label: "Strongly B" },
+] as const;
+
+// Collapse a 5-point preference to a plain A / tie / B direction (for gold-QA).
+function prefDirection(pref: string | undefined): "A" | "tie" | "B" | null {
+  if (pref === "strong_a" || pref === "slight_a") return "A";
+  if (pref === "strong_b" || pref === "slight_b") return "B";
+  if (pref === "tie") return "tie";
+  return null;
+}
+
 const FLAG_REASONS = ["Broken / unreadable", "Offensive content", "Unclear prompt"];
 
 function fmtTime(total: number) {
@@ -65,9 +90,8 @@ export function TaskWorkspace({
 
   // per-task answer state
   const [ratings, setRatings] = useState<Record<string, number>>({});
-  const [feedback, setFeedback] = useState("");
-  const [choice, setChoice] = useState<"A" | "tie" | "B" | null>(null);
-  const [rationale, setRationale] = useState("");
+  const [preferences, setPreferences] = useState<Record<string, string>>({});
+  const [feedback, setFeedback] = useState(""); // shared by rating + comparison
   const [writingResponse, setWritingResponse] = useState("");
 
   // outcome of the task just submitted + running session totals
@@ -89,9 +113,8 @@ export function TaskWorkspace({
 
   const resetAnswer = useCallback(() => {
     setRatings({});
+    setPreferences({});
     setFeedback("");
-    setChoice(null);
-    setRationale("");
     setWritingResponse("");
     setFlagging(false);
     setNotice(null);
@@ -155,9 +178,15 @@ export function TaskWorkspace({
         return;
       }
     }
-    if (task.kind === "comparison" && choice === null) {
-      setNotice("Please choose which response is better.");
-      return;
+    if (task.kind === "comparison") {
+      if (COMPARISON_DIMENSIONS.some((d) => !preferences[d.key])) {
+        setNotice("Please answer all five comparison questions before submitting.");
+        return;
+      }
+      if (feedback.trim().length < FEEDBACK_MIN) {
+        setNotice(`Please add feedback of at least ${FEEDBACK_MIN} characters.`);
+        return;
+      }
     }
     if (task.kind === "writing" && writingResponse.trim().length < 10) {
       setNotice("Please write a response before submitting.");
@@ -167,10 +196,15 @@ export function TaskWorkspace({
       task.kind === "rating"
         ? { ratings, feedback: feedback.trim() }
         : task.kind === "comparison"
-          ? { choice, rationale }
-          : { response: writingResponse.trim(), rationale };
+          ? {
+              preferences,
+              // plain direction of the overall preference, for gold-QA + reports
+              choice: prefDirection(preferences.overall),
+              feedback: feedback.trim(),
+            }
+          : { response: writingResponse.trim() };
     persist("completed", data);
-  }, [task, ratings, feedback, choice, rationale, writingResponse, persist]);
+  }, [task, ratings, feedback, preferences, writingResponse, persist]);
 
   const skip = useCallback(() => persist("skipped"), [persist]);
   const flag = useCallback(
@@ -192,12 +226,6 @@ export function TaskWorkspace({
       if (tag === "TEXTAREA" || tag === "INPUT" || phase !== "task") return;
       if (!task) return;
 
-      if (task.kind === "comparison") {
-        if (e.key === "1") setChoice("A");
-        if (e.key === "2") setChoice("tie");
-        if (e.key === "3") setChoice("B");
-        if (["1", "2", "3"].includes(e.key)) setNotice(null);
-      }
       if (e.key === "Enter") {
         e.preventDefault();
         submit();
@@ -385,11 +413,11 @@ export function TaskWorkspace({
                 </p>
               ) : kind === "comparison" ? (
                 <p>
-                  Read the prompt and both responses, then choose which is better
-                  (or a tie) and explain why. <br />
+                  Read the prompt and both responses, then for each question pick
+                  which response is better and how strongly (Strongly A → Tie →
+                  Strongly B), and leave feedback explaining your call. <br />
                   <span className="text-foreground/80">
-                    Shortcuts: 1 = A better · 2 = Tie · 3 = B better · Enter to
-                    submit.
+                    Enter submits once every question is answered.
                   </span>
                 </p>
               ) : (
@@ -433,9 +461,14 @@ export function TaskWorkspace({
           <ComparisonTask
             responseA={task.responseA}
             responseB={task.responseB}
-            choice={choice}
-            setChoice={(c) => {
-              setChoice(c);
+            preferences={preferences}
+            setPreference={(key, v) => {
+              setPreferences((p) => ({ ...p, [key]: v }));
+              setNotice(null);
+            }}
+            feedback={feedback}
+            setFeedback={(v) => {
+              setFeedback(v);
               setNotice(null);
             }}
           />
@@ -459,22 +492,6 @@ export function TaskWorkspace({
             <div className="mt-1 text-right text-xs text-muted">
               {writingResponse.trim().length} characters
             </div>
-          </div>
-        )}
-
-        {/* rationale — comparison only (rating has its own required feedback;
-            writing's response IS the answer) */}
-        {task.kind === "comparison" && (
-          <div className="mt-5">
-            <div className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted">
-              Rationale (why?)
-            </div>
-            <Textarea
-              rows={3}
-              value={rationale}
-              onChange={(e) => setRationale(e.target.value)}
-              placeholder="Optional: briefly explain your decision…"
-            />
           </div>
         )}
 
@@ -643,36 +660,29 @@ function RatingTask({
 function ComparisonTask({
   responseA,
   responseB,
-  choice,
-  setChoice,
+  preferences,
+  setPreference,
+  feedback,
+  setFeedback,
 }: {
   responseA: string;
   responseB: string;
-  choice: "A" | "tie" | "B" | null;
-  setChoice: (c: "A" | "tie" | "B") => void;
+  preferences: Record<string, string>;
+  setPreference: (key: string, v: string) => void;
+  feedback: string;
+  setFeedback: (v: string) => void;
 }) {
+  const fbLen = feedback.trim().length;
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2">
         {(["A", "B"] as const).map((key) => (
           <div
             key={key}
-            className={cn(
-              "rounded-xl border p-4 transition-colors",
-              choice === key
-                ? "border-primary/60 bg-primary/5"
-                : "border-ink/10 bg-ink/[0.03]",
-            )}
+            className="rounded-xl border border-ink/10 bg-ink/[0.03] p-4"
           >
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium uppercase tracking-wider text-muted">
-                Response {key}
-              </span>
-              {choice === key && (
-                <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs text-primary">
-                  Selected
-                </span>
-              )}
+            <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
+              Response {key}
             </div>
             <p className="text-[15px] leading-relaxed">
               {key === "A" ? responseA : responseB}
@@ -681,36 +691,60 @@ function ComparisonTask({
         ))}
       </div>
 
-      <div className="mt-5">
-        <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
-          Which is better?
+      <div className="mt-6 space-y-5">
+        <div className="text-xs font-medium uppercase tracking-wider text-muted">
+          Compare the two responses
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          {(
-            [
-              { key: "A", label: "A is better", hint: "1" },
-              { key: "tie", label: "Tie", hint: "2" },
-              { key: "B", label: "B is better", hint: "3" },
-            ] as const
-          ).map((opt) => (
-            <button
-              key={opt.key}
-              onClick={() => setChoice(opt.key)}
-              className={cn(
-                "flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition-colors",
-                choice === opt.key
-                  ? "border-primary/60 bg-primary/15 text-foreground"
-                  : "border-ink/10 bg-ink/5 text-muted hover:text-foreground",
-              )}
-            >
-              {choice === opt.key && <Check size={15} className="text-primary" />}
-              {opt.label}
-              <kbd className="rounded bg-ink/10 px-1.5 text-xs text-muted">
-                {opt.hint}
-              </kbd>
-            </button>
-          ))}
+
+        {COMPARISON_DIMENSIONS.map((dim, i) => {
+          const value = preferences[dim.key];
+          return (
+            <div key={dim.key}>
+              <div className="text-sm font-medium">
+                {i + 1}. {dim.label}
+              </div>
+              <p className="mt-0.5 text-xs text-muted">{dim.hint}</p>
+              <div className="mt-2 grid grid-cols-5 gap-1.5">
+                {PREFERENCE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setPreference(dim.key, opt.key)}
+                    className={cn(
+                      "rounded-lg border px-1 py-2 text-xs font-medium leading-tight transition-colors",
+                      value === opt.key
+                        ? "border-primary/60 bg-primary/15 text-foreground"
+                        : "border-ink/10 bg-ink/5 text-muted hover:text-foreground",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-6">
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <span className="text-xs font-medium uppercase tracking-wider text-muted">
+            Feedback <span className="text-red-300">*</span>
+          </span>
+          <span
+            className={cn(
+              "text-xs",
+              fbLen >= FEEDBACK_MIN ? "text-emerald-300" : "text-muted",
+            )}
+          >
+            {fbLen} / {FEEDBACK_MIN} minimum
+          </span>
         </div>
+        <Textarea
+          rows={3}
+          value={feedback}
+          onChange={(e) => setFeedback(e.target.value)}
+          placeholder="Explain your choice — why is one response better than the other?"
+        />
       </div>
     </>
   );

@@ -19,6 +19,7 @@ export function passesGold(kind: string, data: unknown, gold: unknown): boolean 
     rating?: unknown;
     ratings?: { overall?: unknown };
     choice?: unknown;
+    preferences?: { overall?: string };
   };
   const g = (gold ?? {}) as { min?: number; max?: number; choice?: string };
   if (kind === "RATING") {
@@ -29,7 +30,20 @@ export function passesGold(kind: string, data: unknown, gold: unknown): boolean 
     const max = typeof g.max === "number" ? g.max : 5;
     return Number.isFinite(r) && r >= min && r <= max;
   }
-  if (kind === "COMPARISON") return d.choice === g.choice;
+  if (kind === "COMPARISON") {
+    // collapse the 5-point overall preference to A / tie / B, then compare to
+    // the gold choice. `choice` is stored on submit; legacy rows had only choice.
+    const p = d.preferences?.overall;
+    const dir =
+      p === "strong_a" || p === "slight_a"
+        ? "A"
+        : p === "strong_b" || p === "slight_b"
+          ? "B"
+          : p === "tie"
+            ? "tie"
+            : d.choice;
+    return dir === g.choice;
+  }
   return true; // unknown kind → can't auto-fail
 }
 

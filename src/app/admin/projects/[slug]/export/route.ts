@@ -54,7 +54,9 @@ export async function GET(
     "trainer_response",
     "rating_harmlessness", "rating_prompt_following", "rating_accuracy",
     "rating_human_like", "rating_overall",
-    "choice", "feedback",
+    "choice",
+    "cmp_accuracy", "cmp_safety", "cmp_completeness", "cmp_clarity", "cmp_overall",
+    "feedback",
     "status", "earned_usd",
   ];
 
@@ -64,6 +66,7 @@ export async function GET(
       rating?: number;
       ratings?: Record<string, number>;
       choice?: string;
+      preferences?: Record<string, string>;
       rationale?: string;
       feedback?: string;
       response?: string;
@@ -73,6 +76,7 @@ export async function GET(
     // per-dimension rating; older single-rating submissions surface as `overall`
     const r = ans.ratings ?? {};
     const overall = r.overall ?? ans.rating ?? "";
+    const p = ans.preferences ?? {}; // per-dimension A/B preference (comparison)
     lines.push(
       [
         s.createdAt.toISOString(),
@@ -91,6 +95,11 @@ export async function GET(
         r.humanLike ?? "",
         overall,
         ans.choice ?? "",
+        p.accuracy ?? "",
+        p.safety ?? "",
+        p.completeness ?? "",
+        p.clarity ?? "",
+        p.overall ?? "",
         ans.feedback ?? ans.rationale ?? "",
         s.status,
         (cents / 100).toFixed(2),
