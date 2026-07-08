@@ -1,0 +1,305 @@
+// AI Training Platform — database schema
+// Money is always stored as integer cents to avoid floating-point errors.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Prisma 7: connection URLs live in prisma.config.ts (migrations) and the
+  // PrismaClient driver adapter (runtime). See src/lib/prisma.ts.
+}
+
+/* ───────────────────────────── enums ───────────────────────────── */
+
+enum Role {
+  TRAINER
+  REVIEWER
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING
+  APPROVED
+  WAITLISTED
+  REJECTED
+  SUSPENDED
+}
+
+enum ApplicationStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum TaskType {
+  RESPONSE_RATING
+  SIDE_BY_SIDE
+  RESPONSE_WRITING
+  FACT_CHECK
+  CODING
+  CONVERSATION
+  RED_TEAM
+}
+
+enum TaskKind {
+  RATING
+  COMPARISON
+  WRITING
+  CODING
+  CHAT
+}
+
+enum ProjectStatus {
+  ACTIVE
+  AVAILABLE
+  QUALIFYING
+  PAUSED
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum PayModel {
+  PER_TASK
+  PER_HOUR
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  FLAGGED
+  SKIPPED
+}
+
+enum EarningStatus {
+  PENDING
+  CLEARED
+  PAID
+}
+
+enum PayoutMethod {
+  PAYPAL
+  WISE
+  STRIPE
+}
+
+enum PayoutStatus {
+  PROCESSING
+  PAID
+  FAILED
+}
+
+enum NotificationKind {
+  PROJECT
+  PAYMENT
+  SYSTEM
+}
+
+/* ───────────────────────────── models ──────────────────────────── */
+
+// Profile row. `id` matches the Supabase Auth user id (auth.users.id).
+model User {
+  id           String     @id @db.Uuid
+  email        String     @unique
+  name         String
+  role         Role       @default(TRAINER)
+  status       UserStatus @default(PENDING)
+  tier         String?
+  country      String?
+  languages    String[]
+  skills       String[]
+  availability String?
+  initials     String?
+
+  // payout settings
+  payoutMethod PayoutMethod?
+  paypalEmail  String?
+  iban         String?
+
+  // email notification preferences { tasks, payments, announcements }
+  notifyPrefs  Json?
+
+  // legal acceptance
+  agreedNdaAt        DateTime?
+  agreedContractorAt DateTime?
+
+  // cached aggregate stats (displayed on dashboard)
+  availableCents  Int @default(0)
+  pendingCents    Int @default(0)
+  lifetimeCents   Int @default(0)
+  thisWeekCents   Int @default(0)
+  lastWeekCents   Int @default(0)
+  qualityScore    Int @default(0)
+  acceptanceRate  Int @default(0)
+  tasksCompleted  Int @default(0)
+  hoursLogged     Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  application     Application?
+  submissions     Submission[]
+  earnings        EarningEntry[]
+  payouts         Payout[]
+  notifications   Notification[]
+  qualifications  UserQualification[]
+  weeklyEarnings  WeeklyEarning[]
+}
+
+model Application {
+  id              String            @id @default(uuid()) @db.Uuid
+  userId          String            @unique @db.Uuid
+  country         String
+  languages       String[]
+  expertise       String[]
+  availability    String
+  referral        String?
+  assessmentScore Int?
+  writingSample   String?
+  status          ApplicationStatus @default(PENDING)
+  createdAt       DateTime          @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Project {
+  id           String        @id @default(uuid()) @db.Uuid
+  slug         String        @unique
+  title        String
+  description  String
+  taskType     TaskType
+  payRateCents   Int // per hour, display reference
+  payModel       PayModel      @default(PER_TASK)
+  difficulty     Difficulty    @default(INTERMEDIATE)
+  status         ProjectStatus @default(AVAILABLE)
+  tasksAvailable Int           @default(0)
+  accentFrom     String        @default("from-brand-indigo")
+  accentTo       String        @default("to-brand-violet")
+  createdAt      DateTime      @default(now())
+
+  tasks          Task[]
+  qualifications UserQualification[]
+}
+
+model UserQualification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  projectId String   @db.Uuid
+  passed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+}
+
+model Task {
+  id         String   @id @default(uuid()) @db.Uuid
+  projectId  String   @db.Uuid
+  kind       TaskKind
+  prompt     String
+  data       Json // { response } | { responseA, responseB } | ...
+  isGold     Boolean  @default(false)
+  goldAnswer Json? // expected answer for QA, never shown to trainer
+  createdAt  DateTime @default(now())
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+}
+
+model Submission {
+  id             String           @id @default(uuid()) @db.Uuid
+  taskId         String           @db.Uuid
+  userId         String           @db.Uuid
+  batchId        String?          @db.Uuid // groups a workspace run (set by submitBatch)
+  data           Json // { rating, issues, choice, rationale }
+  timeSpentSec   Int              @default(0)
+  status         SubmissionStatus @default(SUBMITTED)
+  reviewFeedback String?
+  createdAt      DateTime         @default(now())
+
+  task    Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  earning EarningEntry?
+
+  @@unique([taskId, userId]) // a trainer can only submit a given task once
+  @@index([batchId])
+}
+
+model EarningEntry {
+  id           String        @id @default(uuid()) @db.Uuid
+  userId       String        @db.Uuid
+  submissionId String?       @unique @db.Uuid
+  batchId      String?       @db.Uuid // links to the Submissions of the same workspace run
+  amountCents  Int
+  status       EarningStatus @default(PENDING)
+  // denormalized for the earnings ledger display
+  projectTitle String?
+  taskType     String?
+  taskCount    Int           @default(0)
+  createdAt    DateTime      @default(now())
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submission Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+}
+
+model WeeklyEarning {
+  id          String @id @default(uuid()) @db.Uuid
+  userId      String @db.Uuid
+  idx         Int
+  label       String
+  amountCents Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, idx])
+}
+
+model Payout {
+  id          String       @id @default(uuid()) @db.Uuid
+  userId      String       @db.Uuid
+  amountCents Int
+  feeCents    Int          @default(0)
+  method      PayoutMethod
+  status      PayoutStatus @default(PROCESSING)
+  createdAt   DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  title     String
+  body      String
+  kind      NotificationKind @default(SYSTEM)
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Announcement {
+  id        String   @id @default(uuid()) @db.Uuid
+  title     String
+  body      String
+  tag       String
+  createdAt DateTime @default(now())
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  email     String
+  message   String
+  createdAt DateTime @default(now())
+}
