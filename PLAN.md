@@ -114,7 +114,7 @@ task workspace). What's built so far is correct and stays.
   (aurora + neural-net background), recolorable brand tokens.
 - ✅ Marketing/recruitment site (trainer-facing) — correct as built.
 - ✅ Demo auth (cookie session, `proxy.ts` guard) + trainer dashboard
-  (Overview, Projects, Earnings, Profile) on mock data. Login: demo@trainloop.ai / REDACTED_DEMO_PASSWORD.
+  (Overview, Projects, Earnings, Profile) on mock data. Login: demo@trainway.ai / REDACTED_DEMO_PASSWORD.
 
 **Next big pieces (all freelancer-facing):**
 - ⬜ Align trainer dashboard task types to the four real products (Annotation/RLHF,
@@ -139,6 +139,6 @@ brand spectrum indigo→violet→fuchsia→cyan (recolor via `--brand-*`). Dashb
 
 - [x] Tech stack — Next.js + TS + Tailwind v4
 - [x] Public-site aesthetic — Cinematic Dark
-- [ ] Final brand name (placeholder "TrainLoop") + logo
+- [x] Final brand name: "Trainway" — [ ] logo
 - [ ] Which task workspace to build first (recommend: Annotation/RLHF)
 - [ ] Greek-language vs. Coding division priority for the first dataset/PoC

@@ -9,6 +9,6 @@ export const SESSION_COOKIE = "tl_session";
 export const SESSION_VALUE = "demo-trainer";
 
 export const DEMO_CREDENTIALS = {
-  email: "demo@trainloop.ai",
+  email: "demo@trainway.ai",
   password: "REDACTED_DEMO_PASSWORD",
 };

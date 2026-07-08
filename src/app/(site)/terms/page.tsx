@@ -59,8 +59,8 @@ export default function TermsPage() {
       <LegalSection title="Contact">
         <p>
           Questions about these terms? Email{" "}
-          <a href="mailto:legal@trainloop.ai" className="text-primary hover:underline">
-            legal@trainloop.ai
+          <a href="mailto:legal@trainway.ai" className="text-primary hover:underline">
+            legal@trainway.ai
           </a>
           .
         </p>

@@ -3,10 +3,10 @@
  * Change the brand name / tagline here and it updates across the whole site.
  */
 export const siteConfig = {
-  name: "TrainLoop", // placeholder brand — rename anytime
+  name: "Trainway",
   tagline: "Get paid to train the world's AI.",
   description:
-    "TrainLoop connects skilled freelancers with paid projects that train and evaluate AI models. Work from anywhere, on your own schedule.",
+    "Trainway connects skilled freelancers with paid projects that train and evaluate AI models. Work from anywhere, on your own schedule.",
   url: "https://example.com",
 
   // Primary navigation (marketing site)

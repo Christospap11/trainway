@@ -57,7 +57,7 @@ export interface Notification {
 export const demoUser = {
   name: "Alex Rivera",
   firstName: "Alex",
-  email: "demo@trainloop.ai",
+  email: "demo@trainway.ai",
   initials: "AR",
   tier: "Expert Trainer",
   memberSince: "2025-09-01",

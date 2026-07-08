@@ -6,9 +6,9 @@ import { ContactForm } from "@/components/site/contact-form";
 export const metadata: Metadata = { title: "Contact" };
 
 const channels = [
-  { icon: HelpCircle, label: "Support", value: "support@trainloop.ai" },
-  { icon: Briefcase, label: "Partnerships", value: "hello@trainloop.ai" },
-  { icon: Mail, label: "General", value: "info@trainloop.ai" },
+  { icon: HelpCircle, label: "Support", value: "support@trainway.ai" },
+  { icon: Briefcase, label: "Partnerships", value: "hello@trainway.ai" },
+  { icon: Mail, label: "General", value: "info@trainway.ai" },
 ];
 
 export default function ContactPage() {

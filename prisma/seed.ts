@@ -27,7 +27,7 @@ const supabaseAdmin = createSupabaseClient(
 );
 
 const DEMO_PASSWORD = "REDACTED_DEMO_PASSWORD";
-const ADMIN_EMAIL = "admin@trainloop.ai";
+const ADMIN_EMAIL = "admin@trainway.ai";
 const ADMIN_PASSWORD = "REDACTED_ADMIN_PASSWORD";
 
 // Create a Supabase auth user (or find it if it already exists) and return its id.

@@ -87,10 +87,10 @@ export default function HelpPage() {
             Get help from a real person, usually within one business day.
           </p>
           <Link
-            href="mailto:support@trainloop.ai"
+            href="mailto:support@trainway.ai"
             className="mt-4 inline-flex h-10 items-center justify-center rounded-full border border-ink/15 bg-ink/5 px-5 text-sm font-medium transition-colors hover:bg-ink/10"
           >
-            support@trainloop.ai
+            support@trainway.ai
           </Link>
         </div>
 
@@ -103,7 +103,7 @@ export default function HelpPage() {
             Join other trainers to share tips and ask questions.
           </p>
           <a
-            href="https://discord.gg/trainloop"
+            href="https://discord.gg/trainway"
             target="_blank"
             rel="noopener noreferrer"
             className="mt-4 inline-flex h-10 items-center justify-center rounded-full border border-ink/15 bg-ink/5 px-5 text-sm font-medium transition-colors hover:bg-ink/10"

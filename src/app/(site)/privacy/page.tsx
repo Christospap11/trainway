@@ -49,8 +49,8 @@ export default function PrivacyPage() {
       <LegalSection title="Contact">
         <p>
           For privacy requests, email{" "}
-          <a href="mailto:privacy@trainloop.ai" className="text-primary hover:underline">
-            privacy@trainloop.ai
+          <a href="mailto:privacy@trainway.ai" className="text-primary hover:underline">
+            privacy@trainway.ai
           </a>
           .
         </p>
