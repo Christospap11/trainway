@@ -40,7 +40,11 @@ enum TaskType {
   SIDE_BY_SIDE
   RESPONSE_WRITING
   FACT_CHECK
-  CODING
+  CODING // legacy — superseded by the four CODE_* types below
+  CODE_GENERATION
+  CODE_REFACTORING
+  CODE_DEBUGGING
+  CODE_REVIEW
   CONVERSATION
   RED_TEAM
 }
@@ -49,7 +53,11 @@ enum TaskKind {
   RATING
   COMPARISON
   WRITING
-  CODING
+  CODING // legacy
+  CODE_GEN
+  CODE_REFACTOR
+  CODE_DEBUG
+  CODE_REVIEW
   CHAT
 }
 

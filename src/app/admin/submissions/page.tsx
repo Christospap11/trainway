@@ -78,18 +78,49 @@ export default async function AdminSubmissionsPage() {
                 {b.items.map((it, i) => (
                   <div key={i} className="flex items-start gap-3 px-5 py-3">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded bg-ink/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted">
-                          {it.kind.toLowerCase()}
+                          {it.kind.toLowerCase().replace(/_/g, " ")}
                         </span>
                         {it.isGold && (
                           <span className="inline-flex items-center gap-1 text-[11px] text-amber-300">
                             <Star size={10} /> gold
                           </span>
                         )}
+                        {/* coding self-reports: did they run it, what did they say was missed */}
+                        {it.notes.map((n) => (
+                          <span
+                            key={n}
+                            className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                          >
+                            {n}
+                          </span>
+                        ))}
                       </div>
                       <div className="mt-1 truncate text-sm">{it.prompt}</div>
                       {it.rationale && <div className="mt-0.5 truncate text-xs text-muted">“{it.rationale}”</div>}
+
+                      {/* proof-of-run screenshots (private bucket, signed for 1h) */}
+                      {it.screenshots.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {it.screenshots.map((url, j) => (
+                            <a
+                              key={j}
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block h-16 w-24 overflow-hidden rounded-lg border border-ink/10 transition-opacity hover:opacity-80"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={url}
+                                alt={`Screenshot ${j + 1}`}
+                                className="h-full w-full object-cover"
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 whitespace-nowrap text-sm">
                       <span className="text-muted">{it.answer}</span>

@@ -51,11 +51,25 @@ export async function GET(
   const headers = [
     "submitted_at", "trainer", "email", "kind", "is_gold", "prompt",
     "response", "response_a", "response_b",
+    // coding task content
+    "language", "code", "original_code", "refactored_code",
+    "buggy_code", "error_output", "ai_response", "ai_review",
     "trainer_response",
+    // response rating (1–5)
     "rating_harmlessness", "rating_prompt_following", "rating_accuracy",
     "rating_human_like", "rating_overall",
+    // side-by-side (A↔B)
     "choice",
     "cmp_accuracy", "cmp_safety", "cmp_completeness", "cmp_clarity", "cmp_overall",
+    // coding rubrics (1–5) — the dimension keys differ per category, so every
+    // key any coding category can emit gets its own column
+    "code_correctness", "code_coverage", "code_quality", "code_efficiency",
+    "code_behavior", "code_readability", "code_structure", "code_regressions",
+    "code_root_cause", "code_fix_correct", "code_side_effects", "code_explanation",
+    "code_detection", "code_comment_correctness", "code_severity", "code_actionability",
+    "code_overall",
+    // coding self-reports
+    "execution", "reproduced", "missed_issues", "screenshots",
     "feedback",
     "status", "earned_usd",
   ];
@@ -70,8 +84,24 @@ export async function GET(
       rationale?: string;
       feedback?: string;
       response?: string;
+      execution?: string;
+      repro?: string;
+      missed?: string[];
+      screenshots?: string[];
     };
-    const td = s.task.data as { response?: string; responseA?: string; responseB?: string };
+    const td = s.task.data as {
+      response?: string;
+      responseA?: string;
+      responseB?: string;
+      language?: string;
+      code?: string;
+      originalCode?: string;
+      refactoredCode?: string;
+      buggyCode?: string;
+      errorOutput?: string;
+      aiResponse?: string;
+      aiReview?: string;
+    };
     const cents = earnMap.get(s.batchId ?? "") ?? 0;
     // per-dimension rating; older single-rating submissions surface as `overall`
     const r = ans.ratings ?? {};
@@ -88,18 +118,53 @@ export async function GET(
         td.response ?? "",
         td.responseA ?? "",
         td.responseB ?? "",
+        td.language ?? "",
+        td.code ?? "",
+        td.originalCode ?? "",
+        td.refactoredCode ?? "",
+        td.buggyCode ?? "",
+        td.errorOutput ?? "",
+        td.aiResponse ?? "",
+        td.aiReview ?? "",
         ans.response ?? "", // what the trainer wrote (writing tasks)
         r.safety ?? "",
         r.promptFollowing ?? "",
         r.accuracy ?? "",
         r.humanLike ?? "",
-        overall,
+        // `overall` is shared by rating and every coding category — it's the
+        // dimension gold-QA grades, so it gets its own column below too
+        s.task.kind === "RATING" ? overall : "",
         ans.choice ?? "",
         p.accuracy ?? "",
         p.safety ?? "",
         p.completeness ?? "",
         p.clarity ?? "",
         p.overall ?? "",
+        // code generation
+        r.correctness ?? "",
+        r.coverage ?? "",
+        r.quality ?? "",
+        r.efficiency ?? "",
+        // code refactoring
+        r.behavior ?? "",
+        r.readability ?? "",
+        r.structure ?? "",
+        r.regressions ?? "",
+        // code debugging
+        r.rootCause ?? "",
+        r.fixCorrect ?? "",
+        r.sideEffects ?? "",
+        r.explanation ?? "",
+        // code review
+        r.detection ?? "",
+        r.commentCorrectness ?? "",
+        r.severity ?? "",
+        r.actionability ?? "",
+        s.task.kind.startsWith("CODE_") ? overall : "",
+        ans.execution ?? "",
+        ans.repro ?? "",
+        (ans.missed ?? []).join("; "),
+        (ans.screenshots ?? []).join("; "),
         ans.feedback ?? ans.rationale ?? "",
         s.status,
         (cents / 100).toFixed(2),

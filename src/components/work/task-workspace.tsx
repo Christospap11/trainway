@@ -13,8 +13,21 @@ import {
 } from "lucide-react";
 import { Textarea } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { CodeBlock } from "@/components/work/code-block";
+import { ScreenshotUpload } from "@/components/work/screenshot-upload";
 import { submitTask, type TaskResult } from "@/app/work/actions";
 import type { WorkspaceKind, WorkspaceTask } from "@/lib/mock-tasks";
+import {
+  CODING_CONFIGS,
+  COMPARISON_DIMENSIONS,
+  FEEDBACK_MIN,
+  PREFERENCE_OPTIONS,
+  RATING_DIMENSIONS,
+  isCodingKind,
+  prefDirection,
+  type CodingConfig,
+  type Dim,
+} from "@/lib/rubrics";
 import { cn } from "@/lib/utils";
 
 type Project = {
@@ -23,43 +36,6 @@ type Project = {
   taskType: string;
   payRate: string;
 };
-
-// The five rating dimensions a trainer scores 1–5 for a response.
-// `overall` is the dimension gold-QA checks against the task's acceptable range.
-const RATING_DIMENSIONS = [
-  { key: "safety", label: "Harmlessness", hint: "Safe — no harmful, dangerous, or offensive content" },
-  { key: "promptFollowing", label: "Prompt following", hint: "Actually addresses what the user asked" },
-  { key: "accuracy", label: "Accuracy", hint: "Factually correct — no made-up info or hallucinations" },
-  { key: "humanLike", label: "Human-like", hint: "Reads like a natural, fluent human answer — right tone & terms" },
-  { key: "overall", label: "Overall quality", hint: "How good the response is as a whole" },
-] as const;
-
-const FEEDBACK_MIN = 20;
-
-// Side-by-side comparison: each question is answered on a 5-point A↔B scale.
-const COMPARISON_DIMENSIONS = [
-  { key: "accuracy", label: "Clinical accuracy", hint: "Which is more medically correct and evidence-based" },
-  { key: "safety", label: "Safety", hint: "Which better avoids harm — flags red flags, says when to seek care" },
-  { key: "completeness", label: "Completeness", hint: "Which more fully covers key points, caveats, and next steps" },
-  { key: "clarity", label: "Clarity & tone", hint: "Which is clearer and more appropriate for a patient" },
-  { key: "overall", label: "Overall preference", hint: "Which response is better overall" },
-] as const;
-
-const PREFERENCE_OPTIONS = [
-  { key: "strong_a", label: "Strongly A" },
-  { key: "slight_a", label: "Slightly A" },
-  { key: "tie", label: "Tie" },
-  { key: "slight_b", label: "Slightly B" },
-  { key: "strong_b", label: "Strongly B" },
-] as const;
-
-// Collapse a 5-point preference to a plain A / tie / B direction (for gold-QA).
-function prefDirection(pref: string | undefined): "A" | "tie" | "B" | null {
-  if (pref === "strong_a" || pref === "slight_a") return "A";
-  if (pref === "strong_b" || pref === "slight_b") return "B";
-  if (pref === "tie") return "tie";
-  return null;
-}
 
 const FLAG_REASONS = ["Broken / unreadable", "Offensive content", "Unclear prompt"];
 
@@ -88,11 +64,14 @@ export function TaskWorkspace({
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // per-task answer state
+  // per-task answer state (`ratings` + `feedback` are shared by rating & coding)
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [preferences, setPreferences] = useState<Record<string, string>>({});
-  const [feedback, setFeedback] = useState(""); // shared by rating + comparison
+  const [feedback, setFeedback] = useState("");
   const [writingResponse, setWritingResponse] = useState("");
+  const [proofChoice, setProofChoice] = useState("");
+  const [screenshots, setScreenshots] = useState<string[]>([]);
+  const [chips, setChips] = useState<string[]>([]);
 
   // outcome of the task just submitted + running session totals
   const [last, setLast] = useState<{
@@ -110,12 +89,17 @@ export function TaskWorkspace({
 
   const task = tasks[index];
   const hasMore = index + 1 < tasks.length;
+  const coding: CodingConfig | null =
+    task && isCodingKind(task.kind) ? CODING_CONFIGS[task.kind] : null;
 
   const resetAnswer = useCallback(() => {
     setRatings({});
     setPreferences({});
     setFeedback("");
     setWritingResponse("");
+    setProofChoice("");
+    setScreenshots([]);
+    setChips([]);
     setFlagging(false);
     setNotice(null);
     setElapsed(0);
@@ -168,32 +152,70 @@ export function TaskWorkspace({
 
   const submit = useCallback(() => {
     if (!task) return;
+    const needFeedback = () => {
+      if (feedback.trim().length < FEEDBACK_MIN) {
+        setNotice(`Please add feedback of at least ${FEEDBACK_MIN} characters.`);
+        return true;
+      }
+      return false;
+    };
+
     if (task.kind === "rating") {
       if (RATING_DIMENSIONS.some((d) => !ratings[d.key])) {
         setNotice("Please rate all five questions (1–5) before submitting.");
         return;
       }
-      if (feedback.trim().length < FEEDBACK_MIN) {
-        setNotice(`Please add feedback of at least ${FEEDBACK_MIN} characters.`);
-        return;
-      }
+      if (needFeedback()) return;
     }
+
     if (task.kind === "comparison") {
       if (COMPARISON_DIMENSIONS.some((d) => !preferences[d.key])) {
         setNotice("Please answer all five comparison questions before submitting.");
         return;
       }
-      if (feedback.trim().length < FEEDBACK_MIN) {
-        setNotice(`Please add feedback of at least ${FEEDBACK_MIN} characters.`);
-        return;
-      }
+      if (needFeedback()) return;
     }
+
     if (task.kind === "writing" && writingResponse.trim().length < 10) {
       setNotice("Please write a response before submitting.");
       return;
     }
-    const data =
-      task.kind === "rating"
+
+    if (coding) {
+      if (coding.dimensions.some((d) => !ratings[d.key])) {
+        setNotice("Please score all five questions (1–5) before submitting.");
+        return;
+      }
+      if (coding.proof) {
+        if (!proofChoice) {
+          setNotice(`Please answer: ${coding.proof.question}`);
+          return;
+        }
+        // claiming you ran the code means you can show it running
+        const opt = coding.proof.options.find((o) => o.key === proofChoice);
+        if (opt?.requiresProof && screenshots.length === 0) {
+          setNotice(
+            `You said you ran the code — please attach a screenshot of the output as proof.`,
+          );
+          return;
+        }
+      }
+      if (coding.chips && chips.length === 0) {
+        setNotice(`Please answer: ${coding.chips.question}`);
+        return;
+      }
+      if (needFeedback()) return;
+    }
+
+    const data: Record<string, unknown> = coding
+      ? {
+          ratings,
+          feedback: feedback.trim(),
+          ...(coding.proof ? { [coding.proof.key]: proofChoice } : {}),
+          ...(coding.chips ? { [coding.chips.key]: chips } : {}),
+          ...(screenshots.length ? { screenshots } : {}),
+        }
+      : task.kind === "rating"
         ? { ratings, feedback: feedback.trim() }
         : task.kind === "comparison"
           ? {
@@ -203,8 +225,20 @@ export function TaskWorkspace({
               feedback: feedback.trim(),
             }
           : { response: writingResponse.trim() };
+
     persist("completed", data);
-  }, [task, ratings, feedback, preferences, writingResponse, persist]);
+  }, [
+    task,
+    coding,
+    ratings,
+    feedback,
+    preferences,
+    writingResponse,
+    proofChoice,
+    screenshots,
+    chips,
+    persist,
+  ]);
 
   const skip = useCallback(() => persist("skipped"), [persist]);
   const flag = useCallback(
@@ -235,13 +269,18 @@ export function TaskWorkspace({
     return () => window.removeEventListener("keydown", onKey);
   }, [task, phase, submit]);
 
+  const setRating = (key: string, n: number) => {
+    setRatings((r) => ({ ...r, [key]: n }));
+    setNotice(null);
+  };
+
   /* ── unsupported type ───────────────────────────────────────────── */
   if (kind === "unsupported") {
     return (
       <CenteredMessage
         projectId={project.id}
         title="Workspace coming soon"
-        body={`The "${project.taskType}" workspace isn't built yet. We started with rating, comparison, and writing tasks.`}
+        body={`The "${project.taskType}" workspace isn't built yet.`}
       />
     );
   }
@@ -347,6 +386,9 @@ export function TaskWorkspace({
   }
 
   /* ── active task ────────────────────────────────────────────────── */
+  // coding tasks show a lot of code — give them room to breathe
+  const wide = !!coding;
+
   return (
     <div className="flex min-h-screen flex-col">
       {/* top bar */}
@@ -373,7 +415,10 @@ export function TaskWorkspace({
               {fmtTime(elapsed)}
             </span>
             <span className="text-sm text-muted">
-              Task <span className="text-foreground">{session.completed + session.skipped + session.flagged + 1}</span>
+              Task{" "}
+              <span className="text-foreground">
+                {session.completed + session.skipped + session.flagged + 1}
+              </span>
             </span>
             <ThemeToggle />
           </div>
@@ -381,7 +426,12 @@ export function TaskWorkspace({
       </header>
 
       {/* body */}
-      <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6">
+      <div
+        className={cn(
+          "mx-auto w-full flex-1 px-4 py-6 sm:px-6",
+          wide ? "max-w-5xl" : "max-w-3xl",
+        )}
+      >
         {/* instructions */}
         <div className="mb-6 overflow-hidden rounded-xl border border-ink/10 bg-ink/[0.02]">
           <button
@@ -402,7 +452,14 @@ export function TaskWorkspace({
           </button>
           {showInstructions && (
             <div className="border-t border-ink/10 px-4 py-3 text-sm text-muted">
-              {kind === "rating" ? (
+              {coding ? (
+                <p>
+                  {coding.blurb} <br />
+                  <span className="text-foreground/80">
+                    Enter submits once every question is answered.
+                  </span>
+                </p>
+              ) : kind === "rating" ? (
                 <p>
                   Read the prompt and the AI&apos;s response, then rate it on each
                   of the five questions from 1 (worst) to 5 (best), and leave
@@ -433,9 +490,9 @@ export function TaskWorkspace({
         {/* prompt */}
         <div className="mb-5">
           <div className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted">
-            Prompt
+            {coding ? "Task" : "Prompt"}
           </div>
-          <div className="rounded-xl border border-ink/10 bg-ink/[0.03] p-4 text-[15px] leading-relaxed">
+          <div className="whitespace-pre-wrap rounded-xl border border-ink/10 bg-ink/[0.03] p-4 text-[15px] leading-relaxed">
             {task.prompt}
           </div>
         </div>
@@ -445,10 +502,7 @@ export function TaskWorkspace({
           <RatingTask
             response={task.response}
             ratings={ratings}
-            setRating={(key, n) => {
-              setRatings((r) => ({ ...r, [key]: n }));
-              setNotice(null);
-            }}
+            setRating={setRating}
             feedback={feedback}
             setFeedback={(v) => {
               setFeedback(v);
@@ -495,6 +549,35 @@ export function TaskWorkspace({
           </div>
         )}
 
+        {coding && (
+          <CodingTask
+            task={task}
+            config={coding}
+            ratings={ratings}
+            setRating={setRating}
+            proofChoice={proofChoice}
+            setProofChoice={(v) => {
+              setProofChoice(v);
+              setNotice(null);
+            }}
+            screenshots={screenshots}
+            setScreenshots={(v) => {
+              setScreenshots(v);
+              setNotice(null);
+            }}
+            chips={chips}
+            setChips={(v) => {
+              setChips(v);
+              setNotice(null);
+            }}
+            feedback={feedback}
+            setFeedback={(v) => {
+              setFeedback(v);
+              setNotice(null);
+            }}
+          />
+        )}
+
         {notice && (
           <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
             {notice}
@@ -504,7 +587,12 @@ export function TaskWorkspace({
 
       {/* action bar */}
       <footer className="sticky bottom-0 border-t border-ink/10 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div
+          className={cn(
+            "mx-auto flex items-center justify-between gap-3 px-4 py-3 sm:px-6",
+            wide ? "max-w-5xl" : "max-w-3xl",
+          )}
+        >
           {flagging ? (
             <div className="flex flex-1 flex-wrap items-center gap-2">
               <span className="text-sm text-muted">Reason:</span>
@@ -564,6 +652,94 @@ export function TaskWorkspace({
   );
 }
 
+/* ───────────────────────────────────────────────── shared controls ── */
+
+/** The 1–5 scale used by both response rating and every coding category. */
+function ScoreScale({
+  dimensions,
+  ratings,
+  setRating,
+  heading,
+}: {
+  dimensions: Dim[];
+  ratings: Record<string, number>;
+  setRating: (key: string, n: number) => void;
+  heading: string;
+}) {
+  return (
+    <div className="mt-6 space-y-5">
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-medium uppercase tracking-wider text-muted">
+          {heading}
+        </div>
+        <div className="text-xs text-muted">1 = worst · 5 = best</div>
+      </div>
+
+      {dimensions.map((dim, i) => {
+        const value = ratings[dim.key] ?? 0;
+        return (
+          <div key={dim.key}>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm font-medium">
+                {i + 1}. {dim.label}
+              </span>
+              <span className="text-xs text-muted">{value ? `${value} / 5` : "—"}</span>
+            </div>
+            <p className="mt-0.5 text-xs text-muted">{dim.hint}</p>
+            <div className="mt-2 flex gap-1.5">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setRating(dim.key, n)}
+                  aria-label={`${dim.label}: ${n}`}
+                  className={cn(
+                    "h-10 flex-1 rounded-lg border text-sm font-medium transition-colors",
+                    value === n
+                      ? "border-primary/60 bg-primary/15 text-foreground"
+                      : "border-ink/10 bg-ink/5 text-muted hover:text-foreground",
+                  )}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FeedbackBox({
+  feedback,
+  setFeedback,
+  placeholder,
+}: {
+  feedback: string;
+  setFeedback: (v: string) => void;
+  placeholder: string;
+}) {
+  const len = feedback.trim().length;
+  return (
+    <div className="mt-6">
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <span className="text-xs font-medium uppercase tracking-wider text-muted">
+          Feedback <span className="text-red-300">*</span>
+        </span>
+        <span className={cn("text-xs", len >= FEEDBACK_MIN ? "text-emerald-300" : "text-muted")}>
+          {len} / {FEEDBACK_MIN} minimum
+        </span>
+      </div>
+      <Textarea
+        rows={3}
+        value={feedback}
+        onChange={(e) => setFeedback(e.target.value)}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
 /* ───────────────────────────────────────────────────── task bodies ── */
 
 function RatingTask({
@@ -579,7 +755,6 @@ function RatingTask({
   feedback: string;
   setFeedback: (v: string) => void;
 }) {
-  const fbLen = feedback.trim().length;
   return (
     <>
       <div className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted">
@@ -589,70 +764,18 @@ function RatingTask({
         {response}
       </div>
 
-      <div className="mt-6 space-y-5">
-        <div className="flex items-center justify-between">
-          <div className="text-xs font-medium uppercase tracking-wider text-muted">
-            Rate this response
-          </div>
-          <div className="text-xs text-muted">1 = worst · 5 = best</div>
-        </div>
+      <ScoreScale
+        dimensions={RATING_DIMENSIONS}
+        ratings={ratings}
+        setRating={setRating}
+        heading="Rate this response"
+      />
 
-        {RATING_DIMENSIONS.map((dim, i) => {
-          const value = ratings[dim.key] ?? 0;
-          return (
-            <div key={dim.key}>
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-sm font-medium">
-                  {i + 1}. {dim.label}
-                </span>
-                <span className="text-xs text-muted">
-                  {value ? `${value} / 5` : "—"}
-                </span>
-              </div>
-              <p className="mt-0.5 text-xs text-muted">{dim.hint}</p>
-              <div className="mt-2 flex gap-1.5">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => setRating(dim.key, n)}
-                    aria-label={`${dim.label}: ${n}`}
-                    className={cn(
-                      "h-10 flex-1 rounded-lg border text-sm font-medium transition-colors",
-                      value === n
-                        ? "border-primary/60 bg-primary/15 text-foreground"
-                        : "border-ink/10 bg-ink/5 text-muted hover:text-foreground",
-                    )}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-6">
-        <div className="mb-1.5 flex items-baseline justify-between">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted">
-            Feedback <span className="text-red-300">*</span>
-          </span>
-          <span
-            className={cn(
-              "text-xs",
-              fbLen >= FEEDBACK_MIN ? "text-emerald-300" : "text-muted",
-            )}
-          >
-            {fbLen} / {FEEDBACK_MIN} minimum
-          </span>
-        </div>
-        <Textarea
-          rows={3}
-          value={feedback}
-          onChange={(e) => setFeedback(e.target.value)}
-          placeholder="Explain your scores — what is good or wrong with this response?"
-        />
-      </div>
+      <FeedbackBox
+        feedback={feedback}
+        setFeedback={setFeedback}
+        placeholder="Explain your scores — what is good or wrong with this response?"
+      />
     </>
   );
 }
@@ -672,15 +795,11 @@ function ComparisonTask({
   feedback: string;
   setFeedback: (v: string) => void;
 }) {
-  const fbLen = feedback.trim().length;
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2">
         {(["A", "B"] as const).map((key) => (
-          <div
-            key={key}
-            className="rounded-xl border border-ink/10 bg-ink/[0.03] p-4"
-          >
+          <div key={key} className="rounded-xl border border-ink/10 bg-ink/[0.03] p-4">
             <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
               Response {key}
             </div>
@@ -725,27 +844,205 @@ function ComparisonTask({
         })}
       </div>
 
-      <div className="mt-6">
-        <div className="mb-1.5 flex items-baseline justify-between">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted">
-            Feedback <span className="text-red-300">*</span>
-          </span>
-          <span
-            className={cn(
-              "text-xs",
-              fbLen >= FEEDBACK_MIN ? "text-emerald-300" : "text-muted",
-            )}
-          >
-            {fbLen} / {FEEDBACK_MIN} minimum
-          </span>
-        </div>
-        <Textarea
-          rows={3}
-          value={feedback}
-          onChange={(e) => setFeedback(e.target.value)}
-          placeholder="Explain your choice — why is one response better than the other?"
-        />
+      <FeedbackBox
+        feedback={feedback}
+        setFeedback={setFeedback}
+        placeholder="Explain your choice — why is one response better than the other?"
+      />
+    </>
+  );
+}
+
+/* ───────────────────────────────────────────────────────── coding ── */
+
+/** The AI's prose answer (diagnosis, fix, review comments) — may embed code. */
+function AiAnswer({ title, text }: { title: string; text: string }) {
+  return (
+    <div>
+      <div className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted">
+        {title}
       </div>
+      <div className="max-h-[26rem] overflow-auto whitespace-pre-wrap rounded-xl border border-primary/25 bg-primary/[0.04] p-4 font-mono text-[13px] leading-relaxed">
+        {text}
+      </div>
+    </div>
+  );
+}
+
+function CodingTask({
+  task,
+  config,
+  ratings,
+  setRating,
+  proofChoice,
+  setProofChoice,
+  screenshots,
+  setScreenshots,
+  chips,
+  setChips,
+  feedback,
+  setFeedback,
+}: {
+  task: WorkspaceTask;
+  config: CodingConfig;
+  ratings: Record<string, number>;
+  setRating: (key: string, n: number) => void;
+  proofChoice: string;
+  setProofChoice: (v: string) => void;
+  screenshots: string[];
+  setScreenshots: (v: string[]) => void;
+  chips: string[];
+  setChips: (v: string[]) => void;
+  feedback: string;
+  setFeedback: (v: string) => void;
+}) {
+  const proofRequired =
+    !!config.proof?.options.find((o) => o.key === proofChoice)?.requiresProof;
+
+  function toggleChip(key: string) {
+    const none = config.chips!.noneKey;
+    // "nothing was missed" is mutually exclusive with naming something missed
+    if (key === none) {
+      setChips(chips.includes(none) ? [] : [none]);
+      return;
+    }
+    const without = chips.filter((c) => c !== none);
+    setChips(
+      without.includes(key) ? without.filter((c) => c !== key) : [...without, key],
+    );
+  }
+
+  return (
+    <>
+      {/* ── what the trainer is judging ──────────────────────────── */}
+      {task.kind === "code_gen" && (
+        <CodeBlock
+          code={task.code}
+          language={task.language}
+          title={`AI-generated code${task.language ? ` · ${task.language}` : ""}`}
+        />
+      )}
+
+      {task.kind === "code_refactor" && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <CodeBlock
+            code={task.originalCode}
+            language={task.language}
+            title="Original"
+          />
+          <CodeBlock
+            code={task.refactoredCode}
+            language={task.language}
+            title="AI's refactor"
+          />
+        </div>
+      )}
+
+      {task.kind === "code_debug" && (
+        <div className="space-y-4">
+          <CodeBlock
+            code={task.buggyCode}
+            language={task.language}
+            title={`Broken code${task.language ? ` · ${task.language}` : ""}`}
+          />
+          {task.errorOutput && (
+            <CodeBlock code={task.errorOutput} title="Error output" terminal />
+          )}
+          <AiAnswer title="AI's diagnosis & fix" text={task.aiResponse} />
+        </div>
+      )}
+
+      {task.kind === "code_review" && (
+        <div className="space-y-4">
+          <CodeBlock
+            code={task.code}
+            language={task.language}
+            title={`Code under review${task.language ? ` · ${task.language}` : ""}`}
+          />
+          <AiAnswer title="AI's review comments" text={task.aiReview} />
+        </div>
+      )}
+
+      {/* ── did you actually run it? ─────────────────────────────── */}
+      {config.proof && (
+        <div className="mt-6 rounded-xl border border-ink/10 bg-ink/[0.02] p-4">
+          <div className="text-sm font-medium">{config.proof.question}</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {config.proof.options.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setProofChoice(opt.key)}
+                className={cn(
+                  "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
+                  proofChoice === opt.key
+                    ? "border-primary/60 bg-primary/15 text-foreground"
+                    : "border-ink/10 bg-ink/5 text-muted hover:text-foreground",
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {proofRequired && (
+            <ScreenshotUpload
+              label={config.proof.proofLabel}
+              hint={config.proof.proofHint}
+              required
+              paths={screenshots}
+              onChange={setScreenshots}
+            />
+          )}
+        </div>
+      )}
+
+      {/* ── the five questions ───────────────────────────────────── */}
+      <ScoreScale
+        dimensions={config.dimensions}
+        ratings={ratings}
+        setRating={setRating}
+        heading={`Score this ${config.label.toLowerCase()}`}
+      />
+
+      {/* ── what did the review miss? (code review only) ─────────── */}
+      {config.chips && (
+        <div className="mt-6">
+          <div className="text-sm font-medium">{config.chips.question}</div>
+          <p className="mt-0.5 text-xs text-muted">{config.chips.hint}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {config.chips.options.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => toggleChip(opt.key)}
+                className={cn(
+                  "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
+                  chips.includes(opt.key)
+                    ? "border-primary/60 bg-primary/15 text-foreground"
+                    : "border-ink/10 bg-ink/5 text-muted hover:text-foreground",
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── optional proof (refactoring) ─────────────────────────── */}
+      {config.optionalProof && (
+        <ScreenshotUpload
+          label={config.optionalProof.proofLabel}
+          hint={config.optionalProof.proofHint}
+          paths={screenshots}
+          onChange={setScreenshots}
+        />
+      )}
+
+      <FeedbackBox
+        feedback={feedback}
+        setFeedback={setFeedback}
+        placeholder="Explain your scores — be concrete. Name the line, the bug, or the missed requirement."
+      />
     </>
   );
 }

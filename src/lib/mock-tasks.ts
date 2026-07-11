@@ -7,7 +7,15 @@
  */
 import type { TaskType } from "@/lib/mock-data";
 
-export type WorkspaceKind = "rating" | "comparison" | "writing" | "unsupported";
+export type WorkspaceKind =
+  | "rating"
+  | "comparison"
+  | "writing"
+  | "code_gen"
+  | "code_refactor"
+  | "code_debug"
+  | "code_review"
+  | "unsupported";
 
 export type WorkspaceTask =
   | {
@@ -33,12 +41,53 @@ export type WorkspaceTask =
       id: string;
       kind: "writing";
       prompt: string;
+    }
+  // ── coding ─────────────────────────────────────────────────────────
+  // The prompt is the spec; `code` is what the AI generated for it.
+  | {
+      id: string;
+      kind: "code_gen";
+      prompt: string;
+      language?: string;
+      code: string;
+    }
+  // Judge the AI's refactor of `originalCode`.
+  | {
+      id: string;
+      kind: "code_refactor";
+      prompt: string;
+      language?: string;
+      originalCode: string;
+      refactoredCode: string;
+    }
+  // Judge the AI's diagnosis + fix for code that fails with `errorOutput`.
+  | {
+      id: string;
+      kind: "code_debug";
+      prompt: string;
+      language?: string;
+      buggyCode: string;
+      errorOutput?: string;
+      aiResponse: string;
+    }
+  // Review the AI's review of `code`.
+  | {
+      id: string;
+      kind: "code_review";
+      prompt: string;
+      language?: string;
+      code: string;
+      aiReview: string;
     };
 
 export function workspaceKindFor(taskType: TaskType): WorkspaceKind {
   if (taskType === "Response rating") return "rating";
   if (taskType === "Side-by-side comparison") return "comparison";
   if (taskType === "Response writing") return "writing";
+  if (taskType === "Code generation") return "code_gen";
+  if (taskType === "Code refactoring") return "code_refactor";
+  if (taskType === "Code debugging") return "code_debug";
+  if (taskType === "Code review") return "code_review";
   return "unsupported";
 }
 

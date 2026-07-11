@@ -61,6 +61,10 @@ const TASK_TYPE = {
   "Response writing": "RESPONSE_WRITING",
   "Fact-checking": "FACT_CHECK",
   Coding: "CODING",
+  "Code generation": "CODE_GENERATION",
+  "Code refactoring": "CODE_REFACTORING",
+  "Code debugging": "CODE_DEBUGGING",
+  "Code review": "CODE_REVIEW",
   "Conversation design": "CONVERSATION",
 } as const;
 

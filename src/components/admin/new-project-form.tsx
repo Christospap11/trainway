@@ -11,7 +11,23 @@ const TASK_TYPES = [
   ["RESPONSE_RATING", "Response rating"],
   ["SIDE_BY_SIDE", "Side-by-side comparison"],
   ["RESPONSE_WRITING", "Response writing"],
+  ["CODE_GENERATION", "Code generation"],
+  ["CODE_REFACTORING", "Code refactoring"],
+  ["CODE_DEBUGGING", "Code debugging"],
+  ["CODE_REVIEW", "Code review"],
 ] as const;
+
+// What each type's upload file has to contain, shown under the picker so an
+// admin knows the required columns before they build the CSV.
+const TYPE_COLUMNS: Record<string, string> = {
+  RESPONSE_RATING: "CSV columns: prompt, response",
+  SIDE_BY_SIDE: "CSV columns: prompt, response_a, response_b",
+  RESPONSE_WRITING: "CSV columns: prompt",
+  CODE_GENERATION: "CSV columns: prompt, code (+ optional language)",
+  CODE_REFACTORING: "CSV columns: prompt, original_code, refactored_code (+ optional language)",
+  CODE_DEBUGGING: "CSV columns: prompt, buggy_code, ai_response (+ optional error_output, language)",
+  CODE_REVIEW: "CSV columns: prompt, code, ai_review (+ optional language)",
+};
 
 export function NewProjectForm() {
   const router = useRouter();
@@ -67,6 +83,7 @@ export function NewProjectForm() {
               <option key={v} value={v}>{l}</option>
             ))}
           </Select>
+          <p className="mt-1.5 text-xs text-muted">{TYPE_COLUMNS[f.taskType]}</p>
         </div>
         <div>
           <FieldLabel htmlFor="diff">Difficulty</FieldLabel>

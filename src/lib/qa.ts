@@ -22,8 +22,10 @@ export function passesGold(kind: string, data: unknown, gold: unknown): boolean 
     preferences?: { overall?: string };
   };
   const g = (gold ?? {}) as { min?: number; max?: number; choice?: string };
-  if (kind === "RATING") {
-    // multi-dimension ratings are gold-checked on the `overall` score;
+  // Every 1–5 rubric — response rating and all four coding categories — is
+  // gold-checked the same way: the trainer's `overall` score has to land inside
+  // the acceptable range on the task's answer key.
+  if (kind === "RATING" || kind.startsWith("CODE_")) {
     // fall back to the legacy single `rating` for older submissions.
     const r = Number(d.ratings?.overall ?? d.rating);
     const min = typeof g.min === "number" ? g.min : 1;

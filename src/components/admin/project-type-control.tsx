@@ -9,6 +9,10 @@ const OPTIONS = [
   ["RESPONSE_RATING", "Response rating", "Trainer rates a stored AI response — file needs a response column."],
   ["SIDE_BY_SIDE", "Side by side", "Trainer picks the better of two responses — needs responseA & responseB."],
   ["RESPONSE_WRITING", "Response writing", "Trainer writes the answer — file needs only a prompt."],
+  ["CODE_GENERATION", "Code generation", "Trainer scores AI-written code against a spec — needs a code column (language optional)."],
+  ["CODE_REFACTORING", "Code refactoring", "Trainer judges a refactor — needs original_code & refactored_code."],
+  ["CODE_DEBUGGING", "Code debugging", "Trainer judges a diagnosis + fix — needs buggy_code & ai_response (error_output optional)."],
+  ["CODE_REVIEW", "Code review", "Trainer reviews the AI's review — needs code & ai_review."],
 ] as const;
 
 export function ProjectTypeControl({

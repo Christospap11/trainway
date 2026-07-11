@@ -9,6 +9,10 @@ export type TaskType =
   | "Response writing"
   | "Fact-checking"
   | "Coding"
+  | "Code generation"
+  | "Code refactoring"
+  | "Code debugging"
+  | "Code review"
   | "Conversation design";
 
 export type ProjectStatus = "active" | "available" | "qualifying" | "paused";

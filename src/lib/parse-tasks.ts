@@ -77,7 +77,7 @@ const truthy = (v: string) => /^(true|1|yes|y)$/i.test(v.trim());
  * Flexible: `kind` is optional (the server fills it from the project's task
  * type when absent), and common column names are accepted. An `input`/`context`
  * column is appended to the prompt (handles instruction+input datasets). */
-function csvToTasks(text: string): unknown[] {
+export function csvToTasks(text: string): unknown[] {
   const rows = parseCsv(text, detectDelimiter(text));
   if (rows.length < 2) return [];
   const headers = rows[0].map((h) => h.trim().toLowerCase());
@@ -96,14 +96,24 @@ function csvToTasks(text: string): unknown[] {
     };
 
     const rawKind = get("kind").toUpperCase();
-    const kind = ["RATING", "COMPARISON", "WRITING"].includes(rawKind) ? rawKind : "";
+    const kind = [
+      "RATING",
+      "COMPARISON",
+      "WRITING",
+      "CODE_GEN",
+      "CODE_REFACTOR",
+      "CODE_DEBUG",
+      "CODE_REVIEW",
+    ].includes(rawKind)
+      ? rawKind
+      : "";
 
-    let prompt = firstOf("prompt", "instruction", "question", "text", "task");
+    let prompt = firstOf("prompt", "instruction", "question", "text", "task", "spec");
     const context = firstOf("input", "context");
     if (context) prompt = prompt ? `${prompt}\n\n${context}` : context;
 
     const task: Record<string, unknown> = { prompt };
-    if (kind) task.kind = kind; // else server infers from the project
+    if (kind) task.kind = kind; // else server infers from the columns present
 
     const response = firstOf("response", "output", "answer", "completion");
     if (response) task.response = response;
@@ -111,6 +121,24 @@ function csvToTasks(text: string): unknown[] {
     const rb = firstOf("responseb", "response_b");
     if (ra) task.responseA = ra;
     if (rb) task.responseB = rb;
+
+    // ── coding columns ────────────────────────────────────────────
+    const language = firstOf("language", "lang");
+    if (language) task.language = language;
+    const code = firstOf("code", "generated_code", "generatedcode");
+    if (code) task.code = code;
+    const original = firstOf("original_code", "originalcode", "before");
+    const refactored = firstOf("refactored_code", "refactoredcode", "after");
+    if (original) task.originalCode = original;
+    if (refactored) task.refactoredCode = refactored;
+    const buggy = firstOf("buggy_code", "buggycode", "broken_code");
+    if (buggy) task.buggyCode = buggy;
+    const errorOutput = firstOf("error_output", "erroroutput", "error", "stack_trace");
+    if (errorOutput) task.errorOutput = errorOutput;
+    const aiResponse = firstOf("ai_response", "airesponse", "diagnosis", "fix");
+    if (aiResponse) task.aiResponse = aiResponse;
+    const aiReview = firstOf("ai_review", "aireview", "review");
+    if (aiReview) task.aiReview = aiReview;
 
     if (truthy(get("isgold"))) {
       task.isGold = true;

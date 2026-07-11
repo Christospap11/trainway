@@ -11,10 +11,23 @@ type TaskTypeStr =
   | "RESPONSE_WRITING"
   | "FACT_CHECK"
   | "CODING"
+  | "CODE_GENERATION"
+  | "CODE_REFACTORING"
+  | "CODE_DEBUGGING"
+  | "CODE_REVIEW"
   | "CONVERSATION"
   | "RED_TEAM";
 type DiffStr = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
 type StatusStr = "ACTIVE" | "AVAILABLE" | "QUALIFYING" | "PAUSED";
+
+type KindStr =
+  | "RATING"
+  | "COMPARISON"
+  | "WRITING"
+  | "CODE_GEN"
+  | "CODE_REFACTOR"
+  | "CODE_DEBUG"
+  | "CODE_REVIEW";
 
 async function requireAdmin() {
   const user = await getSession();
@@ -24,41 +37,70 @@ async function requireAdmin() {
 
 // Default task kind inferred from a project's task type (used when an uploaded
 // row has no explicit `kind`).
-const TASK_TYPE_TO_KIND: Record<string, "RATING" | "COMPARISON" | "WRITING" | undefined> = {
+const TASK_TYPE_TO_KIND: Record<string, KindStr | undefined> = {
   RESPONSE_RATING: "RATING",
   SIDE_BY_SIDE: "COMPARISON",
   RESPONSE_WRITING: "WRITING",
+  CODE_GENERATION: "CODE_GEN",
+  CODE_REFACTORING: "CODE_REFACTOR",
+  CODE_DEBUGGING: "CODE_DEBUG",
+  CODE_REVIEW: "CODE_REVIEW",
 };
-const VALID_KINDS = ["RATING", "COMPARISON", "WRITING"] as const;
+const VALID_KINDS = [
+  "RATING",
+  "COMPARISON",
+  "WRITING",
+  "CODE_GEN",
+  "CODE_REFACTOR",
+  "CODE_DEBUG",
+  "CODE_REVIEW",
+] as const;
 
 // Reverse of TASK_TYPE_TO_KIND — used to realign an empty project to the kind
 // of data being uploaded.
-const KIND_TO_TASK_TYPE: Record<"RATING" | "COMPARISON" | "WRITING", TaskTypeStr> = {
+const KIND_TO_TASK_TYPE: Record<KindStr, TaskTypeStr> = {
   RATING: "RESPONSE_RATING",
   COMPARISON: "SIDE_BY_SIDE",
   WRITING: "RESPONSE_WRITING",
+  CODE_GEN: "CODE_GENERATION",
+  CODE_REFACTOR: "CODE_REFACTORING",
+  CODE_DEBUG: "CODE_DEBUGGING",
+  CODE_REVIEW: "CODE_REVIEW",
 };
+
+/** What a single uploaded row looks like, before we decide what kind it is. */
+type RowShape = {
+  response?: string;
+  responseA?: string;
+  responseB?: string;
+  code?: string;
+  originalCode?: string;
+  refactoredCode?: string;
+  buggyCode?: string;
+  aiResponse?: string;
+  aiReview?: string;
+};
+
+/** Which kind does this single row's columns describe? */
+function kindOfRow(r: RowShape): KindStr {
+  const has = (v?: string) => !!(v ?? "").trim();
+
+  // coding shapes are unambiguous — each has a column combination nothing else uses
+  if (has(r.originalCode) && has(r.refactoredCode)) return "CODE_REFACTOR";
+  if (has(r.buggyCode) && has(r.aiResponse)) return "CODE_DEBUG";
+  if (has(r.code) && has(r.aiReview)) return "CODE_REVIEW";
+  if (has(r.code)) return "CODE_GEN";
+
+  if (has(r.responseA) && has(r.responseB)) return "COMPARISON";
+  if (has(r.response)) return "RATING";
+  return "WRITING"; // prompt only → the trainer writes the answer
+}
 
 // Infer the task kind from the shape of the uploaded rows (ignoring project
 // type). Returns null when the rows are mixed so existing validation can speak.
-function inferKindFromRows(
-  rows: { response?: string; responseA?: string; responseB?: string }[],
-): "RATING" | "COMPARISON" | "WRITING" | null {
-  let rating = 0,
-    comparison = 0,
-    writing = 0;
-  for (const r of rows) {
-    const resp = (r.response ?? "").trim();
-    const a = (r.responseA ?? "").trim();
-    const b = (r.responseB ?? "").trim();
-    if (a && b) comparison++;
-    else if (resp) rating++;
-    else writing++;
-  }
-  if (writing === rows.length) return "WRITING";
-  if (rating === rows.length) return "RATING";
-  if (comparison === rows.length) return "COMPARISON";
-  return null;
+function inferKindFromRows(rows: RowShape[]): KindStr | null {
+  const kinds = new Set(rows.map(kindOfRow));
+  return kinds.size === 1 ? [...kinds][0] : null;
 }
 
 function slugify(s: string) {
@@ -131,7 +173,15 @@ export async function setProjectStatus(
 }
 
 // task types that have a working trainer workspace
-const SUPPORTED_TASK_TYPES = ["RESPONSE_RATING", "SIDE_BY_SIDE", "RESPONSE_WRITING"];
+const SUPPORTED_TASK_TYPES = [
+  "RESPONSE_RATING",
+  "SIDE_BY_SIDE",
+  "RESPONSE_WRITING",
+  "CODE_GENERATION",
+  "CODE_REFACTORING",
+  "CODE_DEBUGGING",
+  "CODE_REVIEW",
+];
 
 export async function updateProject(
   slug: string,
@@ -184,35 +234,105 @@ export async function updateProject(
 /* ───────────────────────────── tasks ───────────────────────────── */
 
 export type AddTaskInput = {
-  kind: "RATING" | "COMPARISON" | "WRITING";
+  kind: KindStr;
   prompt: string;
   response?: string;
   responseA?: string;
   responseB?: string;
+  // coding
+  language?: string;
+  code?: string;
+  originalCode?: string;
+  refactoredCode?: string;
+  buggyCode?: string;
+  errorOutput?: string;
+  aiResponse?: string;
+  aiReview?: string;
   isGold?: boolean;
   goldMin?: number;
   goldMax?: number;
   goldChoice?: "A" | "tie" | "B";
 };
 
+/** Which columns a kind needs — drives both validation and the error message. */
+const REQUIRED_COLUMNS: Record<KindStr, string[]> = {
+  RATING: ["response"],
+  COMPARISON: ["responseA", "responseB"],
+  WRITING: [],
+  CODE_GEN: ["code"],
+  CODE_REFACTOR: ["originalCode", "refactoredCode"],
+  CODE_DEBUG: ["buggyCode", "aiResponse"],
+  CODE_REVIEW: ["code", "aiReview"],
+};
+
 function buildTaskData(input: AddTaskInput) {
-  if (input.kind === "WRITING") {
-    // the trainer writes the response — the task only carries the prompt
-    return { data: {}, goldAnswer: undefined, valid: true };
+  const t = (v?: string) => (v ?? "").trim();
+  // every coding kind is scored 1–5, so its answer key is a range on `overall`
+  const ratingGold = input.isGold
+    ? { min: input.goldMin ?? 1, max: input.goldMax ?? 5 }
+    : undefined;
+  const lang = t(input.language) || undefined;
+
+  // string-valued so it satisfies Prisma's InputJsonObject without a cast
+  let data: Record<string, string | undefined>;
+  let goldAnswer: { min?: number; max?: number; choice?: string } | undefined;
+
+  switch (input.kind) {
+    case "WRITING":
+      // the trainer writes the response — the task only carries the prompt
+      return { data: {}, goldAnswer: undefined, missing: [] as string[] };
+    case "RATING":
+      data = { response: t(input.response) };
+      goldAnswer = ratingGold;
+      break;
+    case "COMPARISON":
+      data = { responseA: t(input.responseA), responseB: t(input.responseB) };
+      goldAnswer = input.isGold && input.goldChoice ? { choice: input.goldChoice } : undefined;
+      break;
+    case "CODE_GEN":
+      data = { language: lang, code: t(input.code) };
+      goldAnswer = ratingGold;
+      break;
+    case "CODE_REFACTOR":
+      data = {
+        language: lang,
+        originalCode: t(input.originalCode),
+        refactoredCode: t(input.refactoredCode),
+      };
+      goldAnswer = ratingGold;
+      break;
+    case "CODE_DEBUG":
+      data = {
+        language: lang,
+        buggyCode: t(input.buggyCode),
+        errorOutput: t(input.errorOutput) || undefined,
+        aiResponse: t(input.aiResponse),
+      };
+      goldAnswer = ratingGold;
+      break;
+    case "CODE_REVIEW":
+      data = { language: lang, code: t(input.code), aiReview: t(input.aiReview) };
+      goldAnswer = ratingGold;
+      break;
   }
-  if (input.kind === "RATING") {
-    const data = { response: (input.response ?? "").trim() };
-    const goldAnswer = input.isGold
-      ? { min: input.goldMin ?? 1, max: input.goldMax ?? 5 }
-      : undefined;
-    return { data, goldAnswer, valid: !!data.response };
-  }
-  const data = {
-    responseA: (input.responseA ?? "").trim(),
-    responseB: (input.responseB ?? "").trim(),
+
+  const missing = REQUIRED_COLUMNS[input.kind].filter((c) => !data[c]);
+  return { data, goldAnswer, missing };
+}
+
+/** Human-readable "your file is missing X" message for a rejected row. */
+function missingColumnsError(kind: KindStr, missing: string[], row: number): string {
+  const cols = missing.map((c) => `"${c}"`).join(" and ");
+  const label: Record<KindStr, string> = {
+    RATING: "Response rating",
+    COMPARISON: "Side-by-side comparison",
+    WRITING: "Response writing",
+    CODE_GEN: "Code generation",
+    CODE_REFACTOR: "Code refactoring",
+    CODE_DEBUG: "Code debugging",
+    CODE_REVIEW: "Code review",
   };
-  const goldAnswer = input.isGold && input.goldChoice ? { choice: input.goldChoice } : undefined;
-  return { data, goldAnswer, valid: !!data.responseA && !!data.responseB };
+  return `Task ${row}: this project is "${label[kind]}", which needs ${cols} — your file doesn't have ${missing.length === 1 ? "that column" : "those columns"}. Either add ${missing.length === 1 ? "it" : "them"}, or change the project's task type at the top of the page.`;
 }
 
 export async function addTask(
@@ -225,8 +345,10 @@ export async function addTask(
 
   const prompt = input.prompt.trim();
   if (!prompt) return { ok: false, error: "Prompt is required." };
-  const { data, goldAnswer, valid } = buildTaskData(input);
-  if (!valid) return { ok: false, error: "Response text is required." };
+  const { data, goldAnswer, missing } = buildTaskData(input);
+  if (missing.length) {
+    return { ok: false, error: `Missing: ${missing.join(", ")}.` };
+  }
   if (input.isGold && input.kind === "COMPARISON" && !input.goldChoice)
     return { ok: false, error: "Gold comparison tasks need a correct choice." };
 
@@ -307,15 +429,9 @@ export async function addTasksBulk(slug: string, json: string): Promise<BulkResu
     }
     if (!item.prompt?.trim()) return { ok: false, error: `Task ${i + 1}: missing prompt.` };
     const resolved = { ...item, kind };
-    const { data, goldAnswer, valid } = buildTaskData(resolved);
-    if (!valid) {
-      return {
-        ok: false,
-        error:
-          kind === "RATING"
-            ? `Task ${i + 1}: this project is "Response rating", which needs a "response" column to rate. Your file has prompts only — change this project's type to "Response writing" (at the top of the page) to upload write-the-answer tasks.`
-            : `Task ${i + 1}: a comparison task needs "responseA" and "responseB" columns.`,
-      };
+    const { data, goldAnswer, missing } = buildTaskData(resolved);
+    if (missing.length) {
+      return { ok: false, error: missingColumnsError(kind, missing, i + 1) };
     }
     rows.push({
       projectId: project.id,

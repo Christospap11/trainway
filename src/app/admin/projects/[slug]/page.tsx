@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Star, ShieldCheck, ChevronDown, Download } from "lucide-react";
 import { getProjectAdmin } from "@/lib/admin-queries";
-import { AddTaskForm } from "@/components/admin/add-task-form";
+import { AddTaskForm, type Kind } from "@/components/admin/add-task-form";
 import { ProjectStatusControl } from "@/components/admin/project-status-control";
 import { ProjectTypeControl } from "@/components/admin/project-type-control";
 import { DeleteProjectButton, DeleteTaskButton } from "@/components/admin/delete-controls";
@@ -104,6 +104,28 @@ export default async function AdminProjectDetail({
                 {t.kind === "WRITING" && (
                   <p className="text-xs text-muted">✍️ The trainer writes the response — no answer stored on the task.</p>
                 )}
+                {t.kind === "CODE_GEN" && (
+                  <CodePanel label={`AI-generated code${t.language ? ` · ${t.language}` : ""}`} code={t.code} />
+                )}
+                {t.kind === "CODE_REFACTOR" && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <CodePanel label="Original" code={t.originalCode} />
+                    <CodePanel label="AI's refactor" code={t.refactoredCode} />
+                  </div>
+                )}
+                {t.kind === "CODE_DEBUG" && (
+                  <>
+                    <CodePanel label={`Broken code${t.language ? ` · ${t.language}` : ""}`} code={t.buggyCode} />
+                    {t.errorOutput && <CodePanel label="Error output" code={t.errorOutput} />}
+                    <CodePanel label="AI's diagnosis & fix" code={t.aiResponse} />
+                  </>
+                )}
+                {t.kind === "CODE_REVIEW" && (
+                  <>
+                    <CodePanel label={`Code under review${t.language ? ` · ${t.language}` : ""}`} code={t.code} />
+                    <CodePanel label="AI's review comments" code={t.aiReview} />
+                  </>
+                )}
                 {t.goldAnswer && (
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs text-amber-300">
                     <Star size={11} /> Gold answer key — {t.goldAnswer}
@@ -129,17 +151,31 @@ export default async function AdminProjectDetail({
           <ShieldCheck size={18} className="text-primary" />
           <h3 className="font-semibold">Add tasks</h3>
         </div>
-        <AddTaskForm
-          slug={p.slug}
-          defaultKind={
-            p.taskType === "SIDE_BY_SIDE"
-              ? "COMPARISON"
-              : p.taskType === "RESPONSE_WRITING"
-                ? "WRITING"
-                : "RATING"
-          }
-        />
+        <AddTaskForm slug={p.slug} defaultKind={DEFAULT_KIND[p.taskType] ?? "RATING"} />
       </div>
+    </div>
+  );
+}
+
+const DEFAULT_KIND: Record<string, Kind> = {
+  RESPONSE_RATING: "RATING",
+  SIDE_BY_SIDE: "COMPARISON",
+  RESPONSE_WRITING: "WRITING",
+  CODE_GENERATION: "CODE_GEN",
+  CODE_REFACTORING: "CODE_REFACTOR",
+  CODE_DEBUGGING: "CODE_DEBUG",
+  CODE_REVIEW: "CODE_REVIEW",
+};
+
+/** Monospace panel for the code fields on a coding task. */
+function CodePanel({ label, code }: { label: string; code: string | null }) {
+  if (!code) return null;
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wider text-muted">{label}</div>
+      <pre className="mt-1 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg border border-ink/10 bg-background/40 p-3 font-mono text-xs leading-relaxed">
+        {code}
+      </pre>
     </div>
   );
 }

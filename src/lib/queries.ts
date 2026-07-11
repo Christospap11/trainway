@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Project as UiProject } from "@/lib/mock-data";
 import type { WorkspaceKind, WorkspaceTask } from "@/lib/mock-tasks";
+import { codingKindFromTaskType } from "@/lib/rubrics";
 import { weeklyEarningSeries } from "@/lib/series";
 
 /* ───────────────────────── display maps (DB enum → UI string) ───── */
@@ -11,6 +12,10 @@ const TASK_TYPE: Record<string, UiProject["taskType"]> = {
   RESPONSE_WRITING: "Response writing",
   FACT_CHECK: "Fact-checking",
   CODING: "Coding",
+  CODE_GENERATION: "Code generation",
+  CODE_REFACTORING: "Code refactoring",
+  CODE_DEBUGGING: "Code debugging",
+  CODE_REVIEW: "Code review",
   CONVERSATION: "Conversation design",
 };
 
@@ -266,13 +271,21 @@ export async function getWorkspace(slug: string, userId: string) {
         ? "comparison"
         : p.taskType === "RESPONSE_WRITING"
           ? "writing"
-          : "unsupported";
+          : (codingKindFromTaskType(p.taskType) ?? "unsupported");
 
   const tasks: WorkspaceTask[] = openTasks.map((t) => {
     const data = t.data as {
       response?: string;
       responseA?: string;
       responseB?: string;
+      language?: string;
+      code?: string;
+      originalCode?: string;
+      refactoredCode?: string;
+      buggyCode?: string;
+      errorOutput?: string;
+      aiResponse?: string;
+      aiReview?: string;
     };
     // NOTE: isGold / goldAnswer are deliberately NOT sent to the client —
     // they're the hidden QA answer key, used server-side by runQA only.
@@ -285,6 +298,46 @@ export async function getWorkspace(slug: string, userId: string) {
         kind: "rating",
         prompt: t.prompt,
         response: data.response ?? "",
+      };
+    }
+    if (t.kind === "CODE_GEN") {
+      return {
+        id: t.id,
+        kind: "code_gen",
+        prompt: t.prompt,
+        language: data.language,
+        code: data.code ?? "",
+      };
+    }
+    if (t.kind === "CODE_REFACTOR") {
+      return {
+        id: t.id,
+        kind: "code_refactor",
+        prompt: t.prompt,
+        language: data.language,
+        originalCode: data.originalCode ?? "",
+        refactoredCode: data.refactoredCode ?? "",
+      };
+    }
+    if (t.kind === "CODE_DEBUG") {
+      return {
+        id: t.id,
+        kind: "code_debug",
+        prompt: t.prompt,
+        language: data.language,
+        buggyCode: data.buggyCode ?? "",
+        errorOutput: data.errorOutput,
+        aiResponse: data.aiResponse ?? "",
+      };
+    }
+    if (t.kind === "CODE_REVIEW") {
+      return {
+        id: t.id,
+        kind: "code_review",
+        prompt: t.prompt,
+        language: data.language,
+        code: data.code ?? "",
+        aiReview: data.aiReview ?? "",
       };
     }
     return {

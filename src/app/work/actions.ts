@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ownsPath, MAX_SCREENSHOTS_PER_TASK } from "@/lib/storage";
 import { taskResultSchema } from "@/lib/validation";
 
 // DB enum → ledger display label (denormalized onto EarningEntry)
@@ -12,9 +13,33 @@ const TASK_TYPE_LABEL: Record<string, string> = {
   RESPONSE_WRITING: "Response writing",
   FACT_CHECK: "Fact-checking",
   CODING: "Coding",
+  CODE_GENERATION: "Code generation",
+  CODE_REFACTORING: "Code refactoring",
+  CODE_DEBUGGING: "Code debugging",
+  CODE_REVIEW: "Code review",
   CONVERSATION: "Conversation design",
   RED_TEAM: "Red teaming",
 };
+
+/**
+ * Screenshot paths arrive from the client, so they can't be trusted. Storage
+ * keys every object under its uploader's id — keep only the paths this trainer
+ * actually owns, so a crafted submit can't attach someone else's upload.
+ */
+function sanitizeScreenshots(
+  data: Record<string, unknown> | undefined,
+  userId: string,
+): Record<string, unknown> | undefined {
+  if (!data || !("screenshots" in data)) return data;
+  const raw = Array.isArray(data.screenshots) ? data.screenshots : [];
+  const owned = raw.filter((p) => ownsPath(userId, p)).slice(0, MAX_SCREENSHOTS_PER_TASK);
+  if (owned.length) return { ...data, screenshots: owned };
+
+  // nothing survived the ownership check — don't store an empty/forged key
+  const rest = { ...data };
+  delete rest.screenshots;
+  return rest;
+}
 
 const STATUS: Record<TaskAction, "SUBMITTED" | "SKIPPED" | "FLAGGED"> = {
   completed: "SUBMITTED",
@@ -58,7 +83,7 @@ export async function submitTask(
 
   const parsed = taskResultSchema.safeParse(result);
   if (!parsed.success) return { ok: false, error: "Invalid submission data." };
-  const clean = parsed.data;
+  const clean = { ...parsed.data, data: sanitizeScreenshots(parsed.data.data, user.id) };
 
   const project = await prisma.project.findUnique({
     where: { slug: projectSlug },
