@@ -924,17 +924,22 @@ function CodingTask({
       )}
 
       {task.kind === "code_refactor" && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <CodeBlock
-            code={task.originalCode}
-            language={task.language}
-            title="Original"
-          />
-          <CodeBlock
-            code={task.refactoredCode}
-            language={task.language}
-            title="AI's refactor"
-          />
+        <div className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <CodeBlock
+              code={task.originalCode}
+              language={task.language}
+              title="Original"
+            />
+            <CodeBlock
+              code={task.refactoredCode}
+              language={task.language}
+              title="AI's refactor"
+            />
+          </div>
+          {task.aiResponse && (
+            <AiAnswer title="AI's explanation of the refactor" text={task.aiResponse} />
+          )}
         </div>
       )}
 

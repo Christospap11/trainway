@@ -51,7 +51,9 @@ export type WorkspaceTask =
       language?: string;
       code: string;
     }
-  // Judge the AI's refactor of `originalCode`.
+  // Judge the AI's refactor of `originalCode`. `aiResponse` is the model's own
+  // explanation of what it changed — optional, but when a dataset has it the
+  // reasoning is part of what's being judged, so it's shown.
   | {
       id: string;
       kind: "code_refactor";
@@ -59,6 +61,7 @@ export type WorkspaceTask =
       language?: string;
       originalCode: string;
       refactoredCode: string;
+      aiResponse?: string;
     }
   // Judge the AI's diagnosis + fix for code that fails with `errorOutput`.
   | {

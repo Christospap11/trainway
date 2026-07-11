@@ -108,10 +108,13 @@ export default async function AdminProjectDetail({
                   <CodePanel label={`AI-generated code${t.language ? ` · ${t.language}` : ""}`} code={t.code} />
                 )}
                 {t.kind === "CODE_REFACTOR" && (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <CodePanel label="Original" code={t.originalCode} />
-                    <CodePanel label="AI's refactor" code={t.refactoredCode} />
-                  </div>
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <CodePanel label="Original" code={t.originalCode} />
+                      <CodePanel label="AI's refactor" code={t.refactoredCode} />
+                    </div>
+                    <CodePanel label="AI's explanation" code={t.aiResponse} />
+                  </>
                 )}
                 {t.kind === "CODE_DEBUG" && (
                   <>

@@ -298,6 +298,8 @@ function buildTaskData(input: AddTaskInput) {
         language: lang,
         originalCode: t(input.originalCode),
         refactoredCode: t(input.refactoredCode),
+        // optional: the model's own explanation of what it changed
+        aiResponse: t(input.aiResponse) || undefined,
       };
       goldAnswer = ratingGold;
       break;
