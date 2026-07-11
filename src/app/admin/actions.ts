@@ -56,6 +56,10 @@ const VALID_KINDS = [
   "CODE_REVIEW",
 ] as const;
 
+// What the "new project" form starts on. Only a project still sitting on this
+// type is eligible for auto-align — anything else was a deliberate choice.
+const DEFAULT_TASK_TYPE: TaskTypeStr = "RESPONSE_RATING";
+
 // Reverse of TASK_TYPE_TO_KIND — used to realign an empty project to the kind
 // of data being uploaded.
 const KIND_TO_TASK_TYPE: Record<KindStr, TaskTypeStr> = {
@@ -290,7 +294,12 @@ function buildTaskData(input: AddTaskInput) {
       goldAnswer = input.isGold && input.goldChoice ? { choice: input.goldChoice } : undefined;
       break;
     case "CODE_GEN":
-      data = { language: lang, code: t(input.code) };
+      data = {
+        language: lang,
+        code: t(input.code),
+        // optional: the model's own explanation of its approach
+        aiResponse: t(input.aiResponse) || undefined,
+      };
       goldAnswer = ratingGold;
       break;
     case "CODE_REFACTOR":
@@ -400,14 +409,21 @@ export async function addTasksBulk(slug: string, json: string): Promise<BulkResu
   if (items.length === 0) return { ok: false, error: "No tasks in the array." };
   if (items.length > 500) return { ok: false, error: "Max 500 tasks per upload." };
 
-  // Auto-align: if no row declares an explicit kind, infer the kind from the
-  // data itself. When it disagrees with the project's current type and the
-  // project has no tasks yet, switch the project to match — so uploading
-  // prompt-only data to a fresh "rating" project just works (becomes writing).
+  // Auto-align rescues the DEFAULT project type only: an admin who left the
+  // picker on "Response rating" and dropped in prompt-only data shouldn't hit a
+  // wall, so we infer the kind from the data and switch the (empty) project.
+  //
+  // It must NEVER override a type the admin deliberately chose. It used to, and
+  // it silently turned two Code-* projects into rating projects: their CSVs
+  // carry the code inside `prompt`/`response` columns, so the shape genuinely
+  // reads as "rating" — auto-align believed it over the human. If the chosen
+  // type doesn't match the file now, we fall through to the missing-columns
+  // error, which names the columns the file needs.
   let effectiveKind = projectKind;
   let switchedTo: TaskTypeStr | null = null;
   const hasExplicitKind = items.some((it) => it.kind && VALID_KINDS.includes(it.kind));
-  if (!hasExplicitKind) {
+  const isDefaultType = project.taskType === DEFAULT_TASK_TYPE;
+  if (!hasExplicitKind && isDefaultType) {
     const inferred = inferKindFromRows(items);
     if (inferred && inferred !== projectKind) {
       const existing = await prisma.task.count({ where: { projectId: project.id } });

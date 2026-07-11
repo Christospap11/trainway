@@ -307,6 +307,7 @@ export async function getWorkspace(slug: string, userId: string) {
         prompt: t.prompt,
         language: data.language,
         code: data.code ?? "",
+        aiResponse: data.aiResponse,
       };
     }
     if (t.kind === "CODE_REFACTOR") {

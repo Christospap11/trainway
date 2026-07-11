@@ -105,7 +105,10 @@ export default async function AdminProjectDetail({
                   <p className="text-xs text-muted">✍️ The trainer writes the response — no answer stored on the task.</p>
                 )}
                 {t.kind === "CODE_GEN" && (
-                  <CodePanel label={`AI-generated code${t.language ? ` · ${t.language}` : ""}`} code={t.code} />
+                  <>
+                    <CodePanel label={`AI-generated code${t.language ? ` · ${t.language}` : ""}`} code={t.code} />
+                    <CodePanel label="AI's explanation" code={t.aiResponse} />
+                  </>
                 )}
                 {t.kind === "CODE_REFACTOR" && (
                   <>

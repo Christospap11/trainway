@@ -916,11 +916,16 @@ function CodingTask({
     <>
       {/* ── what the trainer is judging ──────────────────────────── */}
       {task.kind === "code_gen" && (
-        <CodeBlock
-          code={task.code}
-          language={task.language}
-          title={`AI-generated code${task.language ? ` · ${task.language}` : ""}`}
-        />
+        <div className="space-y-4">
+          <CodeBlock
+            code={task.code}
+            language={task.language}
+            title={`AI-generated code${task.language ? ` · ${task.language}` : ""}`}
+          />
+          {task.aiResponse && (
+            <AiAnswer title="AI's explanation of its approach" text={task.aiResponse} />
+          )}
+        </div>
       )}
 
       {task.kind === "code_refactor" && (

@@ -43,13 +43,16 @@ export type WorkspaceTask =
       prompt: string;
     }
   // ── coding ─────────────────────────────────────────────────────────
-  // The prompt is the spec; `code` is what the AI generated for it.
+  // The prompt is the spec; `code` is what the AI generated for it. `aiResponse`
+  // is the model's own explanation of its approach — optional, but when a
+  // dataset has it the reasoning is part of what's being judged.
   | {
       id: string;
       kind: "code_gen";
       prompt: string;
       language?: string;
       code: string;
+      aiResponse?: string;
     }
   // Judge the AI's refactor of `originalCode`. `aiResponse` is the model's own
   // explanation of what it changed — optional, but when a dataset has it the
