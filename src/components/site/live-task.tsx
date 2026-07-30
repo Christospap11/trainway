@@ -71,8 +71,11 @@ const T_FEEDBACK = 6700;
 const FEEDBACK_MS = 1800;
 const T_SUBMIT = 8800;
 const T_DONE = 9200;
-const T_RESET = 12000;
+const T_RESET = 12300;
 const CYCLE = 13000;
+/** the new scene fades back up over its first moments, so the handoff reads as
+ *  a crossfade instead of the card blinking out of the layout */
+const FADE_IN = 250;
 
 const LABEL_W = 100; // px — fixed so the ghost cursor can be placed with calc()
 const GAP = 10;
@@ -123,7 +126,7 @@ function derive(elapsed: number): Snapshot {
     feedback: Math.round(progress(t, T_FEEDBACK, FEEDBACK_MS) * s.feedback.length),
     pressed: t >= T_SUBMIT && t < T_DONE,
     done: t >= T_DONE && t < T_RESET,
-    fading: t >= T_RESET,
+    fading: t >= T_RESET || t < FADE_IN,
   };
 }
 
@@ -230,7 +233,7 @@ export function LiveTask() {
       ref={hostRef}
       className={cn(
         "relative transition-opacity duration-500",
-        view.fading ? "opacity-0" : "opacity-100",
+        view.fading ? "opacity-40" : "opacity-100",
       )}
     >
       {/* luminous rim + glow so the card floats off the lattice */}
@@ -239,9 +242,11 @@ export function LiveTask() {
         className="pointer-events-none absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-br from-brand-indigo/20 via-brand-violet/10 to-brand-cyan/20 blur-2xl"
       />
 
-      <div className="overflow-hidden rounded-2xl border border-ink/10 bg-surface/70 shadow-2xl backdrop-blur-xl">
+      {/* On light mode the card is white-on-near-white, so it leans on the ring
+          and a real shadow to separate from the page rather than on fill. */}
+      <div className="overflow-hidden rounded-2xl bg-surface/80 shadow-[0_24px_70px_-20px_rgba(15,23,42,0.35)] ring-1 ring-ink/10 backdrop-blur-xl">
         {/* ── window chrome */}
-        <div className="flex items-center justify-between gap-3 border-b border-ink/10 bg-ink/[0.03] px-4 py-2.5">
+        <div className="flex items-center justify-between gap-3 border-b border-ink/10 bg-ink/[0.04] px-4 py-2.5">
           <div className="flex items-center gap-2 text-[11px] font-medium text-muted">
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-cyan opacity-75" />
@@ -267,7 +272,7 @@ export function LiveTask() {
             {(["a", "b"] as const).map((k) => (
               <div
                 key={k}
-                className="rounded-lg border border-ink/10 bg-ink/[0.02] p-2.5 transition-colors"
+                className="rounded-lg border border-ink/10 bg-ink/[0.035] p-2.5 transition-colors"
               >
                 <div className="flex items-center gap-1.5">
                   <span
@@ -329,7 +334,7 @@ export function LiveTask() {
                             "flex-1 rounded-md border transition-all duration-300",
                             on
                               ? "scale-y-110 border-transparent bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-fuchsia shadow-[0_0_16px_-2px_var(--brand-violet)]"
-                              : "border-ink/10 bg-ink/[0.03]",
+                              : "border-ink/10 bg-ink/[0.05]",
                           )}
                         />
                       );
@@ -359,7 +364,7 @@ export function LiveTask() {
           </div>
 
           {/* ── the trainer's written feedback */}
-          <div className="mt-3.5 rounded-lg border border-ink/10 bg-ink/[0.02] p-2.5">
+          <div className="mt-3.5 rounded-lg border border-ink/10 bg-ink/[0.035] p-2.5">
             <div className="text-[10px] uppercase tracking-[0.14em] text-muted">
               Why — min. 20 characters
             </div>

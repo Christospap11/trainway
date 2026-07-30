@@ -61,7 +61,7 @@ html.light {
   --ink: #131a33;
   /* The lattice is drawn as ink on paper in light mode, so it can carry almost
      full strength — dimming it to half made the page read as blank graph paper. */
-  --ambient-opacity: 0.8;
+  --ambient-opacity: 0.95;
 }
 
 @theme inline {

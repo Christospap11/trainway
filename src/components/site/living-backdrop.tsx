@@ -154,18 +154,22 @@ void main() {
     vec3 paper = vec3(0.960, 0.966, 0.988);
     vec3 tint  = mix(indigo, violet, 0.5);
 
-    float ink = line * (0.45 + 0.55 * band + 0.80 * cursor)
-              + node * (0.95 + 1.30 * band + 1.80 * cursor);
+    // Lines stay faint and nodes carry the structure, so this reads as a
+    // constellation of points rather than a sheet of graph paper.
+    float ink = line * (0.20 + 0.38 * band + 0.70 * cursor)
+              + node * (1.00 + 1.35 * band + 1.85 * cursor);
 
     vec3 lcol = paper;
-    // wells first, so the ink sits on top of the colour rather than under it
-    lcol = mix(lcol, tint,    0.30 * exp(-dot(p - w1, p - w1) * 1.9));
-    lcol = mix(lcol, fuchsia, 0.20 * exp(-dot(p - w2, p - w2) * 2.4));
-    lcol = mix(lcol, cyan,    0.18 * exp(-dot(p - w3, p - w3) * 2.6));
+    // Wells first, so the ink sits on top of the colour rather than under it.
+    // Light mode gets its presence from COLOUR rather than from grid contrast —
+    // a high-contrast lattice on white just reads as busy graph paper.
+    lcol = mix(lcol, tint,    0.44 * exp(-dot(p - w1, p - w1) * 1.9));
+    lcol = mix(lcol, fuchsia, 0.30 * exp(-dot(p - w2, p - w2) * 2.4));
+    lcol = mix(lcol, cyan,    0.26 * exp(-dot(p - w3, p - w3) * 2.6));
 
-    lcol = mix(lcol, vec3(0.30, 0.33, 0.56), clamp(ink, 0.0, 1.0) * 0.75);
-    lcol = mix(lcol, mix(tint, cyan, 0.4), clamp(pulse, 0.0, 1.0) * 0.55);
-    lcol = mix(lcol, tint, 0.06 * band);
+    lcol = mix(lcol, vec3(0.30, 0.33, 0.56), clamp(ink, 0.0, 1.0) * 0.72);
+    lcol = mix(lcol, mix(tint, cyan, 0.4), clamp(pulse, 0.0, 1.0) * 0.60);
+    lcol = mix(lcol, tint, 0.08 * band);
 
     // keep the corners airy
     lcol = mix(paper, lcol, smoothstep(1.60, 0.30, length(p)));
