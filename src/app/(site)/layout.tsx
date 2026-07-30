@@ -1,7 +1,6 @@
 import { Navbar } from "@/components/site/navbar";
 import { Footer } from "@/components/site/footer";
-import { Aurora } from "@/components/site/aurora";
-import { NeuralField } from "@/components/site/neural-field";
+import { LivingBackdrop } from "@/components/site/living-backdrop";
 
 export default function SiteLayout({
   children,
@@ -10,8 +9,7 @@ export default function SiteLayout({
 }) {
   return (
     <div className="grain flex min-h-full flex-col">
-      <Aurora />
-      <NeuralField />
+      <LivingBackdrop />
       <Navbar />
       <main className="flex-1">{children}</main>
       <Footer />

@@ -109,11 +109,28 @@ body {
   }
 }
 
-/* The ambient aurora/neural layers ease back on light mode so the page
-   reads as airy daylight rather than a washed-out version of the dark UI. */
+/* The ambient backdrop eases back on light mode so the page reads as airy
+   daylight rather than a washed-out version of the dark UI. */
 .ambient-layer {
   opacity: var(--ambient-opacity);
   transition: opacity 0.4s ease;
+}
+
+/* Static gradient the WebGL canvas paints over — and the graceful fallback if
+   WebGL is unavailable, so the page is never a flat void. */
+.backdrop-base {
+  background:
+    radial-gradient(60% 55% at 18% 12%, rgba(99, 102, 241, 0.35), transparent 60%),
+    radial-gradient(55% 50% at 85% 8%, rgba(217, 70, 239, 0.28), transparent 60%),
+    radial-gradient(60% 60% at 50% 100%, rgba(34, 211, 238, 0.18), transparent 55%),
+    var(--background);
+}
+html.light .backdrop-base {
+  background:
+    radial-gradient(60% 55% at 18% 12%, rgba(109, 94, 240, 0.16), transparent 60%),
+    radial-gradient(55% 50% at 85% 8%, rgba(217, 70, 239, 0.12), transparent 60%),
+    radial-gradient(60% 60% at 50% 100%, rgba(34, 211, 238, 0.1), transparent 55%),
+    var(--background);
 }
 
 /* ── Utilities ─────────────────────────────────────────────── */
