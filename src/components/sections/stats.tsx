@@ -1,11 +1,12 @@
 import { Container } from "@/components/ui/container";
 import { Reveal } from "@/components/ui/reveal";
+import { CountUp } from "@/components/ui/count-up";
 
 const stats = [
-  { value: "25,000+", label: "Active trainers" },
-  { value: "$12M+", label: "Paid to freelancers" },
-  { value: "120+", label: "Countries" },
-  { value: "4.8/5", label: "Trainer rating" },
+  { value: 25000, suffix: "+", label: "Active trainers" },
+  { value: 12, prefix: "$", suffix: "M+", label: "Paid to freelancers" },
+  { value: 120, suffix: "+", label: "Countries" },
+  { value: 4.8, decimals: 1, suffix: "/5", label: "Trainer rating" },
 ];
 
 export function Stats() {
@@ -20,7 +21,12 @@ export function Stats() {
               className="px-4 text-center md:px-8"
             >
               <div className="text-4xl font-semibold tracking-tight sm:text-5xl">
-                {s.value}
+                <CountUp
+                  value={s.value}
+                  decimals={s.decimals}
+                  prefix={s.prefix}
+                  suffix={s.suffix}
+                />
               </div>
               <div className="mt-2 text-sm text-muted">{s.label}</div>
             </Reveal>

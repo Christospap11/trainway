@@ -59,7 +59,9 @@ html.light {
 
   --surface: #ffffff;
   --ink: #131a33;
-  --ambient-opacity: 0.5;
+  /* The lattice is drawn as ink on paper in light mode, so it can carry almost
+     full strength — dimming it to half made the page read as blank graph paper. */
+  --ambient-opacity: 0.8;
 }
 
 @theme inline {
@@ -176,6 +178,63 @@ html.light .backdrop-base {
   pointer-events: none;
   opacity: 0.025;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Brand range slider — the fill tracks `--pct`, set inline by the component. */
+.range-brand {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.range-brand::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--brand-indigo),
+    var(--brand-violet) var(--pct, 50%),
+    var(--border) var(--pct, 50%)
+  );
+}
+.range-brand::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -8px;
+  height: 22px;
+  width: 22px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow:
+    0 0 0 4px color-mix(in oklab, var(--brand-violet) 35%, transparent),
+    0 2px 10px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease;
+}
+.range-brand:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+.range-brand::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+}
+.range-brand::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--brand-indigo), var(--brand-violet));
+}
+.range-brand::-moz-range-thumb {
+  height: 22px;
+  width: 22px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--brand-violet) 35%, transparent);
+}
+.range-brand:focus-visible::-webkit-slider-thumb,
+.range-brand:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
 }
 
 /* ── Aurora animations ─────────────────────────────────────── */

@@ -2,6 +2,7 @@ import { Clock, Globe, Banknote, Check } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
+import { EarningsCalculator } from "@/components/site/earnings-calculator";
 
 const perks = [
   {
@@ -69,18 +70,7 @@ export function Pay() {
               <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-primary/20 blur-[100px]" />
             </div>
 
-            <div className="text-sm uppercase tracking-[0.2em] text-muted">
-              Typical earnings
-            </div>
-            <div className="mt-4 flex items-baseline gap-3">
-              <span className="text-gradient text-7xl font-semibold tracking-tight sm:text-8xl">
-                $20–40
-              </span>
-            </div>
-            <div className="mt-1 text-xl text-muted">per hour</div>
-            <p className="mt-4 max-w-sm text-muted">
-              Rates vary by project complexity and your qualifications.
-            </p>
+            <EarningsCalculator />
 
             <div className="hairline my-10" />
 
