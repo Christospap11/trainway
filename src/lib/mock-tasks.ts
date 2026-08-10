@@ -15,6 +15,7 @@ export type WorkspaceKind =
   | "code_refactor"
   | "code_debug"
   | "code_review"
+  | "authoring"
   | "unsupported";
 
 export type WorkspaceTask =
@@ -84,6 +85,16 @@ export type WorkspaceTask =
       language?: string;
       code: string;
       aiReview: string;
+    }
+  // Off-platform authoring: `prompt` is the brief, `repoUrl` is the repo to clone.
+  // The trainer does the work on GitHub and records a structured submission.
+  | {
+      id: string;
+      kind: "authoring";
+      prompt: string;
+      repoUrl: string;
+      category?: string;
+      subCategory?: string;
     };
 
 export function workspaceKindFor(taskType: TaskType): WorkspaceKind {
@@ -94,6 +105,7 @@ export function workspaceKindFor(taskType: TaskType): WorkspaceKind {
   if (taskType === "Code refactoring") return "code_refactor";
   if (taskType === "Code debugging") return "code_debug";
   if (taskType === "Code review") return "code_review";
+  if (taskType === "Agentic task authoring") return "authoring";
   return "unsupported";
 }
 

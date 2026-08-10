@@ -132,6 +132,32 @@ export default async function AdminProjectDetail({
                     <CodePanel label="AI's review comments" code={t.aiReview} />
                   </>
                 )}
+                {t.kind === "AUTHORING" && (
+                  <div className="space-y-2">
+                    {(t.category || t.subCategory) && (
+                      <div className="text-xs text-muted">
+                        {[t.category, t.subCategory].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
+                    {t.repoUrl && (
+                      <div>
+                        <div className="text-xs uppercase tracking-wider text-muted">Repository</div>
+                        <a
+                          href={t.repoUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-block break-all font-mono text-xs text-primary hover:underline"
+                        >
+                          {t.repoUrl}
+                        </a>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted">
+                      🛠 Off-platform authoring — the trainer submits a PR link, artifact types,
+                      objectives, a pass@ screenshot &amp; score.
+                    </p>
+                  </div>
+                )}
                 {t.goldAnswer && (
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs text-amber-300">
                     <Star size={11} /> Gold answer key — {t.goldAnswer}
@@ -171,6 +197,7 @@ const DEFAULT_KIND: Record<string, Kind> = {
   CODE_REFACTORING: "CODE_REFACTOR",
   CODE_DEBUGGING: "CODE_DEBUG",
   CODE_REVIEW: "CODE_REVIEW",
+  AGENT_AUTHORING: "AUTHORING",
 };
 
 /** Monospace panel for the code fields on a coding task. */

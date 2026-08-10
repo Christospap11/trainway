@@ -15,6 +15,7 @@ const TASK_TYPES = [
   ["CODE_REFACTORING", "Code refactoring"],
   ["CODE_DEBUGGING", "Code debugging"],
   ["CODE_REVIEW", "Code review"],
+  ["AGENT_AUTHORING", "Agentic task authoring"],
 ] as const;
 
 // What each type's upload file has to contain, shown under the picker so an
@@ -27,6 +28,8 @@ const TYPE_COLUMNS: Record<string, string> = {
   CODE_REFACTORING: "CSV columns: prompt, original_code, refactored_code (+ optional language)",
   CODE_DEBUGGING: "CSV columns: prompt, buggy_code, ai_response (+ optional error_output, language)",
   CODE_REVIEW: "CSV columns: prompt, code, ai_review (+ optional language)",
+  AGENT_AUTHORING:
+    "CSV columns: prompt (brief), repo_url (+ optional category, sub_category). Pay rate = the flat bounty per accepted task.",
 };
 
 export function NewProjectForm() {

@@ -16,6 +16,7 @@ const TASK_TYPE: Record<string, UiProject["taskType"]> = {
   CODE_REFACTORING: "Code refactoring",
   CODE_DEBUGGING: "Code debugging",
   CODE_REVIEW: "Code review",
+  AGENT_AUTHORING: "Agentic task authoring",
   CONVERSATION: "Conversation design",
 };
 
@@ -271,7 +272,9 @@ export async function getWorkspace(slug: string, userId: string) {
         ? "comparison"
         : p.taskType === "RESPONSE_WRITING"
           ? "writing"
-          : (codingKindFromTaskType(p.taskType) ?? "unsupported");
+          : p.taskType === "AGENT_AUTHORING"
+            ? "authoring"
+            : (codingKindFromTaskType(p.taskType) ?? "unsupported");
 
   const tasks: WorkspaceTask[] = openTasks.map((t) => {
     const data = t.data as {
@@ -286,6 +289,9 @@ export async function getWorkspace(slug: string, userId: string) {
       errorOutput?: string;
       aiResponse?: string;
       aiReview?: string;
+      repoUrl?: string;
+      category?: string;
+      subCategory?: string;
     };
     // NOTE: isGold / goldAnswer are deliberately NOT sent to the client —
     // they're the hidden QA answer key, used server-side by runQA only.
@@ -340,6 +346,16 @@ export async function getWorkspace(slug: string, userId: string) {
         language: data.language,
         code: data.code ?? "",
         aiReview: data.aiReview ?? "",
+      };
+    }
+    if (t.kind === "AUTHORING") {
+      return {
+        id: t.id,
+        kind: "authoring",
+        prompt: t.prompt,
+        repoUrl: data.repoUrl ?? "",
+        category: data.category,
+        subCategory: data.subCategory,
       };
     }
     return {

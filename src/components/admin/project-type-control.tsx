@@ -13,6 +13,7 @@ const OPTIONS = [
   ["CODE_REFACTORING", "Code refactoring", "Trainer judges a refactor — needs original_code & refactored_code."],
   ["CODE_DEBUGGING", "Code debugging", "Trainer judges a diagnosis + fix — needs buggy_code & ai_response (error_output optional)."],
   ["CODE_REVIEW", "Code review", "Trainer reviews the AI's review — needs code & ai_review."],
+  ["AGENT_AUTHORING", "Agentic authoring", "Trainer builds a task off-platform & submits a PR — needs prompt (brief) & repo_url. Flat bounty per task."],
 ] as const;
 
 export function ProjectTypeControl({

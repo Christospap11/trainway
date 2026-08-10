@@ -13,7 +13,8 @@ export type QuizKind =
   | "code_gen"
   | "code_refactor"
   | "code_debug"
-  | "code_review";
+  | "code_review"
+  | "authoring";
 
 export const QUIZ_PASS_RATIO = 0.75; // need 3 of 4
 
@@ -238,6 +239,51 @@ const BANK: Record<QuizKind, QuizQuestion[]> = {
       correct: 0,
     },
   ],
+
+  /* ─────────────────── agentic task authoring ─────────────────── */
+
+  authoring: [
+    {
+      q: "You submit a task, but the reference solution you wrote doesn't actually make the verifier pass. This task is…",
+      options: [
+        "Not acceptable — a task must ship a solution that passes its own verifier",
+        "Fine — the agent will figure it out",
+        "Fine as long as the prompt is hard",
+        "Fine if it passes most of the time",
+      ],
+      correct: 0,
+    },
+    {
+      q: "Your verifier scores the work by checking whether the output file simply exists. Why is that weak?",
+      options: [
+        "It can be trivially cheated — an empty or wrong file still 'passes'",
+        "It's too strict",
+        "It runs too slowly",
+        "Nothing wrong with it",
+      ],
+      correct: 0,
+    },
+    {
+      q: "A good task in this program is one that…",
+      options: [
+        "Is genuinely hard, self-contained, reproducible, and can't be gamed",
+        "Requires the most compute possible",
+        "Depends on a live external website staying up",
+        "Has several equally-valid 'right' answers with no way to score them",
+      ],
+      correct: 0,
+    },
+    {
+      q: "You record your pass@ score. Where should that number come from?",
+      options: [
+        "The automated checks (CI) that ran the agent against your verifier",
+        "Your own guess of how hard it feels",
+        "The number of files in the repo",
+        "Whatever makes the task look hardest",
+      ],
+      correct: 0,
+    },
+  ],
 };
 
 /** Questions WITHOUT the answer key — safe to send to the client. */
@@ -265,5 +311,6 @@ export function quizKindForTaskType(taskType: string): QuizKind | null {
   if (taskType === "CODE_REFACTORING") return "code_refactor";
   if (taskType === "CODE_DEBUGGING") return "code_debug";
   if (taskType === "CODE_REVIEW") return "code_review";
+  if (taskType === "AGENT_AUTHORING") return "authoring";
   return null;
 }

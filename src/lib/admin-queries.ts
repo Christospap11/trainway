@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { passesGold } from "@/lib/qa";
+import { artifactLabel, objectiveLabel } from "@/lib/rubrics";
 import { weeklyEarningSeries } from "@/lib/series";
 import { signedScreenshotUrls } from "@/lib/storage";
 
@@ -120,6 +121,9 @@ export async function getProjectAdmin(slug: string) {
         errorOutput?: string;
         aiResponse?: string;
         aiReview?: string;
+        repoUrl?: string;
+        category?: string;
+        subCategory?: string;
       };
       const gold = t.goldAnswer as { min?: number; max?: number; choice?: string } | null;
       return {
@@ -137,6 +141,9 @@ export async function getProjectAdmin(slug: string) {
         errorOutput: data.errorOutput ?? null,
         aiResponse: data.aiResponse ?? null,
         aiReview: data.aiReview ?? null,
+        repoUrl: data.repoUrl ?? null,
+        category: data.category ?? null,
+        subCategory: data.subCategory ?? null,
         isGold: t.isGold,
         // human-readable answer key for the admin (e.g. "rating 1–3" / "B")
         goldAnswer:
@@ -178,20 +185,31 @@ export async function listSubmissionBatches() {
           repro?: string;
           missed?: string[];
           screenshots?: string[];
+          // authoring
+          prUrl?: string;
+          artifactTypes?: string[];
+          objectives?: string[];
+          passScore?: number;
+          notes?: string;
         };
         const overall = ans.ratings?.overall ?? ans.rating;
-        // every 1–5 rubric (rating + all coding kinds) reports its overall score;
-        // comparison is the only kind that reports a side instead
+        // authoring reports a pass@ score; comparison a side; everything else /5
         const answer =
-          s.task.kind === "COMPARISON"
-            ? `Chose ${ans.choice ?? "—"}`
-            : `Overall ${overall ?? "—"}/5`;
+          s.task.kind === "AUTHORING"
+            ? `pass@ ${ans.passScore ?? "—"}`
+            : s.task.kind === "COMPARISON"
+              ? `Chose ${ans.choice ?? "—"}`
+              : `Overall ${overall ?? "—"}/5`;
 
-        // coding extras worth seeing at a glance in the review queue
+        // extras worth seeing at a glance in the review queue
         const notes: string[] = [];
         if (ans.execution) notes.push(EXECUTION_LABEL[ans.execution] ?? ans.execution);
         if (ans.repro) notes.push(REPRO_LABEL[ans.repro] ?? ans.repro);
         if (ans.missed?.length) notes.push(`Missed: ${ans.missed.join(", ")}`);
+        if (ans.artifactTypes?.length)
+          notes.push(`Artifacts: ${ans.artifactTypes.map(artifactLabel).join(", ")}`);
+        if (ans.objectives?.length)
+          notes.push(`Objectives: ${ans.objectives.map(objectiveLabel).join(", ")}`);
 
         const goldPass =
           s.task.isGold && s.task.goldAnswer != null
@@ -204,9 +222,11 @@ export async function listSubmissionBatches() {
           isGold: s.task.isGold,
           answer,
           notes,
+          // the PR link is the thing an admin actually opens to review the work
+          link: ans.prUrl ?? null,
           // signed URLs so the admin can actually open the private uploads
           screenshots: await signedScreenshotUrls(ans.screenshots ?? []),
-          rationale: ans.feedback ?? ans.rationale ?? "",
+          rationale: ans.feedback ?? ans.rationale ?? ans.notes ?? "",
           goldPass,
         };
       }),

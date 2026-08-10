@@ -45,6 +45,7 @@ enum TaskType {
   CODE_REFACTORING
   CODE_DEBUGGING
   CODE_REVIEW
+  AGENT_AUTHORING // off-platform: author a hard terminal task, submit via GitHub
   CONVERSATION
   RED_TEAM
 }
@@ -58,6 +59,7 @@ enum TaskKind {
   CODE_REFACTOR
   CODE_DEBUG
   CODE_REVIEW
+  AUTHORING
   CHAT
 }
 

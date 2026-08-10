@@ -11,13 +11,17 @@ import {
   Keyboard,
   PartyPopper,
 } from "lucide-react";
-import { Textarea } from "@/components/ui/input";
+import { Input, Textarea } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { CodeBlock } from "@/components/work/code-block";
 import { ScreenshotUpload } from "@/components/work/screenshot-upload";
+import { CopyField } from "@/components/work/copy-field";
 import { submitTask, type TaskResult } from "@/app/work/actions";
 import type { WorkspaceKind, WorkspaceTask } from "@/lib/mock-tasks";
 import {
+  AUTHORING_ARTIFACT_TYPES,
+  AUTHORING_CONFIG,
+  AUTHORING_OBJECTIVES,
   CODING_CONFIGS,
   COMPARISON_DIMENSIONS,
   FEEDBACK_MIN,
@@ -25,10 +29,16 @@ import {
   RATING_DIMENSIONS,
   isCodingKind,
   prefDirection,
+  type Choice,
   type CodingConfig,
   type Dim,
 } from "@/lib/rubrics";
 import { cn } from "@/lib/utils";
+
+/** A GitHub-ish URL sanity check for the PR field (not exhaustive, just useful). */
+function looksLikeUrl(s: string) {
+  return /^https?:\/\/\S+\.\S+/.test(s.trim());
+}
 
 type Project = {
   id: string;
@@ -72,6 +82,12 @@ export function TaskWorkspace({
   const [proofChoice, setProofChoice] = useState("");
   const [screenshots, setScreenshots] = useState<string[]>([]);
   const [chips, setChips] = useState<string[]>([]);
+  // authoring submission state
+  const [prUrl, setPrUrl] = useState("");
+  const [artifactTypes, setArtifactTypes] = useState<string[]>([]);
+  const [objectives, setObjectives] = useState<string[]>([]);
+  const [passScore, setPassScore] = useState("");
+  const [notes, setNotes] = useState("");
 
   // outcome of the task just submitted + running session totals
   const [last, setLast] = useState<{
@@ -100,6 +116,11 @@ export function TaskWorkspace({
     setProofChoice("");
     setScreenshots([]);
     setChips([]);
+    setPrUrl("");
+    setArtifactTypes([]);
+    setObjectives([]);
+    setPassScore("");
+    setNotes("");
     setFlagging(false);
     setNotice(null);
     setElapsed(0);
@@ -207,6 +228,30 @@ export function TaskWorkspace({
       if (needFeedback()) return;
     }
 
+    if (task.kind === "authoring") {
+      if (!looksLikeUrl(prUrl)) {
+        setNotice("Please paste the URL of your pull request.");
+        return;
+      }
+      if (artifactTypes.length === 0) {
+        setNotice("Please select at least one artifact type.");
+        return;
+      }
+      if (objectives.length === 0) {
+        setNotice("Please select at least one task objective.");
+        return;
+      }
+      if (AUTHORING_CONFIG.requireScreenshot && screenshots.length === 0) {
+        setNotice("Please attach the pass@ results screenshot.");
+        return;
+      }
+      const score = Number(passScore);
+      if (passScore.trim() === "" || !Number.isFinite(score) || score < 0 || score > 1) {
+        setNotice("Please enter your pass@ score as a number between 0 and 1 (e.g. 0.2).");
+        return;
+      }
+    }
+
     const data: Record<string, unknown> = coding
       ? {
           ratings,
@@ -215,16 +260,25 @@ export function TaskWorkspace({
           ...(coding.chips ? { [coding.chips.key]: chips } : {}),
           ...(screenshots.length ? { screenshots } : {}),
         }
-      : task.kind === "rating"
-        ? { ratings, feedback: feedback.trim() }
-        : task.kind === "comparison"
-          ? {
-              preferences,
-              // plain direction of the overall preference, for gold-QA + reports
-              choice: prefDirection(preferences.overall),
-              feedback: feedback.trim(),
-            }
-          : { response: writingResponse.trim() };
+      : task.kind === "authoring"
+        ? {
+            prUrl: prUrl.trim(),
+            artifactTypes,
+            objectives,
+            passScore: Number(passScore),
+            ...(notes.trim() ? { notes: notes.trim() } : {}),
+            ...(screenshots.length ? { screenshots } : {}),
+          }
+        : task.kind === "rating"
+          ? { ratings, feedback: feedback.trim() }
+          : task.kind === "comparison"
+            ? {
+                preferences,
+                // plain direction of the overall preference, for gold-QA + reports
+                choice: prefDirection(preferences.overall),
+                feedback: feedback.trim(),
+              }
+            : { response: writingResponse.trim() };
 
     persist("completed", data);
   }, [
@@ -237,6 +291,11 @@ export function TaskWorkspace({
     proofChoice,
     screenshots,
     chips,
+    prUrl,
+    artifactTypes,
+    objectives,
+    passScore,
+    notes,
     persist,
   ]);
 
@@ -259,6 +318,8 @@ export function TaskWorkspace({
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "TEXTAREA" || tag === "INPUT" || phase !== "task") return;
       if (!task) return;
+      // authoring is a multi-field form — no Enter-to-submit shortcut there
+      if (task.kind === "authoring") return;
 
       if (e.key === "Enter") {
         e.preventDefault();
@@ -386,8 +447,9 @@ export function TaskWorkspace({
   }
 
   /* ── active task ────────────────────────────────────────────────── */
-  // coding tasks show a lot of code — give them room to breathe
-  const wide = !!coding;
+  // coding + authoring tasks show a lot — give them room to breathe
+  const authoring = task?.kind === "authoring";
+  const wide = !!coding || authoring;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -452,7 +514,9 @@ export function TaskWorkspace({
           </button>
           {showInstructions && (
             <div className="border-t border-ink/10 px-4 py-3 text-sm text-muted">
-              {coding ? (
+              {authoring ? (
+                <p>{AUTHORING_CONFIG.blurb}</p>
+              ) : coding ? (
                 <p>
                   {coding.blurb} <br />
                   <span className="text-foreground/80">
@@ -487,10 +551,17 @@ export function TaskWorkspace({
           )}
         </div>
 
-        {/* prompt */}
+        {/* prompt / brief */}
         <div className="mb-5">
-          <div className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted">
-            {coding ? "Task" : "Prompt"}
+          <div className="mb-1.5 flex items-center justify-between gap-3">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted">
+              {authoring ? "Task brief" : coding ? "Task" : "Prompt"}
+            </span>
+            {task.kind === "authoring" && (task.category || task.subCategory) && (
+              <span className="rounded-full bg-ink/10 px-2.5 py-0.5 text-xs text-muted">
+                {[task.category, task.subCategory].filter(Boolean).join(" · ")}
+              </span>
+            )}
           </div>
           <div className="whitespace-pre-wrap rounded-xl border border-ink/10 bg-ink/[0.03] p-4 text-[15px] leading-relaxed">
             {task.prompt}
@@ -573,6 +644,42 @@ export function TaskWorkspace({
             feedback={feedback}
             setFeedback={(v) => {
               setFeedback(v);
+              setNotice(null);
+            }}
+          />
+        )}
+
+        {task.kind === "authoring" && (
+          <AuthoringTask
+            repoUrl={task.repoUrl}
+            prUrl={prUrl}
+            setPrUrl={(v) => {
+              setPrUrl(v);
+              setNotice(null);
+            }}
+            artifactTypes={artifactTypes}
+            setArtifactTypes={(v) => {
+              setArtifactTypes(v);
+              setNotice(null);
+            }}
+            objectives={objectives}
+            setObjectives={(v) => {
+              setObjectives(v);
+              setNotice(null);
+            }}
+            passScore={passScore}
+            setPassScore={(v) => {
+              setPassScore(v);
+              setNotice(null);
+            }}
+            screenshots={screenshots}
+            setScreenshots={(v) => {
+              setScreenshots(v);
+              setNotice(null);
+            }}
+            notes={notes}
+            setNotes={(v) => {
+              setNotes(v);
               setNotice(null);
             }}
           />
@@ -1054,6 +1161,175 @@ function CodingTask({
         placeholder="Explain your scores — be concrete. Name the line, the bug, or the missed requirement."
       />
     </>
+  );
+}
+
+/* ─────────────────────────────────────────────────────── authoring ── */
+
+/** A multi-select set of chips (used for artifact types + objectives). */
+function ChipSelect({
+  options,
+  selected,
+  onToggle,
+}: {
+  options: Choice[];
+  selected: string[];
+  onToggle: (key: string) => void;
+}) {
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {options.map((opt) => (
+        <button
+          key={opt.key}
+          type="button"
+          onClick={() => onToggle(opt.key)}
+          className={cn(
+            "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
+            selected.includes(opt.key)
+              ? "border-primary/60 bg-primary/15 text-foreground"
+              : "border-ink/10 bg-ink/5 text-muted hover:text-foreground",
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AuthoringTask({
+  repoUrl,
+  prUrl,
+  setPrUrl,
+  artifactTypes,
+  setArtifactTypes,
+  objectives,
+  setObjectives,
+  passScore,
+  setPassScore,
+  screenshots,
+  setScreenshots,
+  notes,
+  setNotes,
+}: {
+  repoUrl: string;
+  prUrl: string;
+  setPrUrl: (v: string) => void;
+  artifactTypes: string[];
+  setArtifactTypes: (v: string[]) => void;
+  objectives: string[];
+  setObjectives: (v: string[]) => void;
+  passScore: string;
+  setPassScore: (v: string) => void;
+  screenshots: string[];
+  setScreenshots: (v: string[]) => void;
+  notes: string;
+  setNotes: (v: string) => void;
+}) {
+  const toggle = (list: string[], set: (v: string[]) => void, key: string) =>
+    set(list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
+
+  return (
+    <div className="space-y-6">
+      {/* the repo to clone */}
+      {repoUrl && (
+        <div>
+          <div className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted">
+            Repository
+          </div>
+          <CopyField value={repoUrl} />
+          <p className="mt-1.5 text-xs text-muted">
+            Clone this, build your task, run it, and open a pull request. Then record your
+            submission below.
+          </p>
+        </div>
+      )}
+
+      <div className="hairline" />
+
+      {/* 1. pull request URL */}
+      <div>
+        <div className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted">
+          Pull request URL <span className="text-red-300">*</span>
+        </div>
+        <Input
+          value={prUrl}
+          onChange={(e) => setPrUrl(e.target.value)}
+          placeholder="https://github.com/your-org/your-repo/pull/123"
+          inputMode="url"
+        />
+      </div>
+
+      {/* 2. artifact type */}
+      <div>
+        <div className="text-sm font-medium">
+          Artifact type <span className="text-red-300">*</span>
+        </div>
+        <p className="mt-0.5 text-xs text-muted">
+          The main objects the agent must inspect or modify. Select all that apply.
+        </p>
+        <ChipSelect
+          options={AUTHORING_ARTIFACT_TYPES}
+          selected={artifactTypes}
+          onToggle={(k) => toggle(artifactTypes, setArtifactTypes, k)}
+        />
+      </div>
+
+      {/* 3. task objective */}
+      <div>
+        <div className="text-sm font-medium">
+          Task objective <span className="text-red-300">*</span>
+        </div>
+        <p className="mt-0.5 text-xs text-muted">
+          What the agent is ultimately asked to accomplish. Select all that apply.
+        </p>
+        <ChipSelect
+          options={AUTHORING_OBJECTIVES}
+          selected={objectives}
+          onToggle={(k) => toggle(objectives, setObjectives, k)}
+        />
+      </div>
+
+      {/* 4. pass@ screenshot */}
+      <ScreenshotUpload
+        label={AUTHORING_CONFIG.screenshotLabel}
+        hint={AUTHORING_CONFIG.screenshotHint}
+        required
+        paths={screenshots}
+        onChange={setScreenshots}
+      />
+
+      {/* 5. pass@ score */}
+      <div>
+        <div className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted">
+          pass@ score <span className="text-red-300">*</span>
+        </div>
+        <Input
+          value={passScore}
+          onChange={(e) => setPassScore(e.target.value)}
+          placeholder="0.2"
+          inputMode="decimal"
+          className="max-w-[160px]"
+        />
+        <p className="mt-1 text-xs text-muted">
+          The fraction of agent runs that passed, from 0 to 1 (e.g. 0.2 means 1 of 5 runs
+          passed). Read it off your CI run.
+        </p>
+      </div>
+
+      {/* 6. notes (optional) */}
+      <div>
+        <div className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted">
+          Notes for the reviewer <span className="text-muted/60">(optional)</span>
+        </div>
+        <Textarea
+          rows={3}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Anything the reviewer should know — design choices, known limitations, how the verifier resists cheating…"
+        />
+      </div>
+    </div>
   );
 }
 

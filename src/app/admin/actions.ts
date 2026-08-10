@@ -15,6 +15,7 @@ type TaskTypeStr =
   | "CODE_REFACTORING"
   | "CODE_DEBUGGING"
   | "CODE_REVIEW"
+  | "AGENT_AUTHORING"
   | "CONVERSATION"
   | "RED_TEAM";
 type DiffStr = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
@@ -27,7 +28,8 @@ type KindStr =
   | "CODE_GEN"
   | "CODE_REFACTOR"
   | "CODE_DEBUG"
-  | "CODE_REVIEW";
+  | "CODE_REVIEW"
+  | "AUTHORING";
 
 async function requireAdmin() {
   const user = await getSession();
@@ -45,6 +47,7 @@ const TASK_TYPE_TO_KIND: Record<string, KindStr | undefined> = {
   CODE_REFACTORING: "CODE_REFACTOR",
   CODE_DEBUGGING: "CODE_DEBUG",
   CODE_REVIEW: "CODE_REVIEW",
+  AGENT_AUTHORING: "AUTHORING",
 };
 const VALID_KINDS = [
   "RATING",
@@ -54,6 +57,7 @@ const VALID_KINDS = [
   "CODE_REFACTOR",
   "CODE_DEBUG",
   "CODE_REVIEW",
+  "AUTHORING",
 ] as const;
 
 // What the "new project" form starts on. Only a project still sitting on this
@@ -70,6 +74,7 @@ const KIND_TO_TASK_TYPE: Record<KindStr, TaskTypeStr> = {
   CODE_REFACTOR: "CODE_REFACTORING",
   CODE_DEBUG: "CODE_DEBUGGING",
   CODE_REVIEW: "CODE_REVIEW",
+  AUTHORING: "AGENT_AUTHORING",
 };
 
 /** What a single uploaded row looks like, before we decide what kind it is. */
@@ -83,11 +88,15 @@ type RowShape = {
   buggyCode?: string;
   aiResponse?: string;
   aiReview?: string;
+  repoUrl?: string;
 };
 
 /** Which kind does this single row's columns describe? */
 function kindOfRow(r: RowShape): KindStr {
   const has = (v?: string) => !!(v ?? "").trim();
+
+  // a repo link is unique to authoring tasks — check it first
+  if (has(r.repoUrl)) return "AUTHORING";
 
   // coding shapes are unambiguous — each has a column combination nothing else uses
   if (has(r.originalCode) && has(r.refactoredCode)) return "CODE_REFACTOR";
@@ -185,6 +194,7 @@ const SUPPORTED_TASK_TYPES = [
   "CODE_REFACTORING",
   "CODE_DEBUGGING",
   "CODE_REVIEW",
+  "AGENT_AUTHORING",
 ];
 
 export async function updateProject(
@@ -252,6 +262,10 @@ export type AddTaskInput = {
   errorOutput?: string;
   aiResponse?: string;
   aiReview?: string;
+  // authoring
+  repoUrl?: string;
+  category?: string;
+  subCategory?: string;
   isGold?: boolean;
   goldMin?: number;
   goldMax?: number;
@@ -267,6 +281,7 @@ const REQUIRED_COLUMNS: Record<KindStr, string[]> = {
   CODE_REFACTOR: ["originalCode", "refactoredCode"],
   CODE_DEBUG: ["buggyCode", "aiResponse"],
   CODE_REVIEW: ["code", "aiReview"],
+  AUTHORING: ["repoUrl"],
 };
 
 function buildTaskData(input: AddTaskInput) {
@@ -325,6 +340,16 @@ function buildTaskData(input: AddTaskInput) {
       data = { language: lang, code: t(input.code), aiReview: t(input.aiReview) };
       goldAnswer = ratingGold;
       break;
+    case "AUTHORING":
+      // off-platform authoring — the task carries the repo to clone + optional
+      // category tags. There's no answer key; admins review the PR manually.
+      data = {
+        repoUrl: t(input.repoUrl),
+        category: t(input.category) || undefined,
+        subCategory: t(input.subCategory) || undefined,
+      };
+      goldAnswer = undefined;
+      break;
   }
 
   const missing = REQUIRED_COLUMNS[input.kind].filter((c) => !data[c]);
@@ -342,6 +367,7 @@ function missingColumnsError(kind: KindStr, missing: string[], row: number): str
     CODE_REFACTOR: "Code refactoring",
     CODE_DEBUG: "Code debugging",
     CODE_REVIEW: "Code review",
+    AUTHORING: "Agentic task authoring",
   };
   return `Task ${row}: this project is "${label[kind]}", which needs ${cols} — your file doesn't have ${missing.length === 1 ? "that column" : "those columns"}. Either add ${missing.length === 1 ? "it" : "them"}, or change the project's task type at the top of the page.`;
 }

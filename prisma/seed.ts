@@ -65,6 +65,7 @@ const TASK_TYPE = {
   "Code refactoring": "CODE_REFACTORING",
   "Code debugging": "CODE_DEBUGGING",
   "Code review": "CODE_REVIEW",
+  "Agentic task authoring": "AGENT_AUTHORING",
   "Conversation design": "CONVERSATION",
 } as const;
 

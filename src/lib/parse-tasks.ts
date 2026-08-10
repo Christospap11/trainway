@@ -104,11 +104,12 @@ export function csvToTasks(text: string): unknown[] {
       "CODE_REFACTOR",
       "CODE_DEBUG",
       "CODE_REVIEW",
+      "AUTHORING",
     ].includes(rawKind)
       ? rawKind
       : "";
 
-    let prompt = firstOf("prompt", "instruction", "question", "text", "task", "spec");
+    let prompt = firstOf("prompt", "instruction", "question", "text", "task", "spec", "brief");
     const context = firstOf("input", "context");
     if (context) prompt = prompt ? `${prompt}\n\n${context}` : context;
 
@@ -139,6 +140,14 @@ export function csvToTasks(text: string): unknown[] {
     if (aiResponse) task.aiResponse = aiResponse;
     const aiReview = firstOf("ai_review", "aireview", "review");
     if (aiReview) task.aiReview = aiReview;
+
+    // ── authoring columns ─────────────────────────────────────────
+    const repoUrl = firstOf("repo_url", "repourl", "repository", "clone_url", "repo");
+    if (repoUrl) task.repoUrl = repoUrl;
+    const category = firstOf("category", "cat");
+    if (category) task.category = category;
+    const subCategory = firstOf("sub_category", "subcategory", "subcat");
+    if (subCategory) task.subCategory = subCategory;
 
     if (truthy(get("isgold"))) {
       task.isGold = true;

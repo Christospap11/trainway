@@ -13,6 +13,7 @@ export type TaskType =
   | "Code refactoring"
   | "Code debugging"
   | "Code review"
+  | "Agentic task authoring"
   | "Conversation design";
 
 export type ProjectStatus = "active" | "available" | "qualifying" | "paused";

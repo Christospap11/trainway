@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ownsPath, MAX_SCREENSHOTS_PER_TASK } from "@/lib/storage";
+import { AUTHORING_ARTIFACT_KEYS, AUTHORING_OBJECTIVE_KEYS } from "@/lib/rubrics";
 import { taskResultSchema } from "@/lib/validation";
 
 // DB enum → ledger display label (denormalized onto EarningEntry)
@@ -17,6 +18,7 @@ const TASK_TYPE_LABEL: Record<string, string> = {
   CODE_REFACTORING: "Code refactoring",
   CODE_DEBUGGING: "Code debugging",
   CODE_REVIEW: "Code review",
+  AGENT_AUTHORING: "Agentic task authoring",
   CONVERSATION: "Conversation design",
   RED_TEAM: "Red teaming",
 };
@@ -39,6 +41,29 @@ function sanitizeScreenshots(
   const rest = { ...data };
   delete rest.screenshots;
   return rest;
+}
+
+/**
+ * Normalize an authoring submission's fields — the client is untrusted, so keep
+ * only known artifact/objective keys, clamp the pass@ score to [0,1], and cap
+ * the free-text so a submission can't carry an unbounded payload.
+ */
+function sanitizeAuthoring(
+  data: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!data) return data;
+  const arr = (v: unknown, allowed: string[]) =>
+    Array.isArray(v) ? [...new Set(v.filter((x): x is string => allowed.includes(x)))] : [];
+  const scoreRaw = Number(data.passScore);
+  const passScore = Number.isFinite(scoreRaw) ? Math.min(1, Math.max(0, scoreRaw)) : 0;
+  return {
+    ...data,
+    prUrl: typeof data.prUrl === "string" ? data.prUrl.trim().slice(0, 500) : "",
+    artifactTypes: arr(data.artifactTypes, AUTHORING_ARTIFACT_KEYS),
+    objectives: arr(data.objectives, AUTHORING_OBJECTIVE_KEYS),
+    passScore,
+    ...(typeof data.notes === "string" ? { notes: data.notes.slice(0, 4000) } : {}),
+  };
 }
 
 const STATUS: Record<TaskAction, "SUBMITTED" | "SKIPPED" | "FLAGGED"> = {
@@ -94,6 +119,10 @@ export async function submitTask(
     return { ok: false, error: "This project is paused right now." };
   }
 
+  // authoring work happens off-platform, so its fields get their own scrub
+  const isAuthoring = project.taskType === "AGENT_AUTHORING";
+  if (isAuthoring) clean.data = sanitizeAuthoring(clean.data);
+
   // must be qualified for this project
   const qual = await prisma.userQualification.findUnique({
     where: { userId_projectId: { userId: user.id, projectId: project.id } },
@@ -113,9 +142,13 @@ export async function submitTask(
   }
 
   const completed = clean.action === "completed";
-  const amountCents = completed
-    ? Math.round((project.payRateCents * clean.timeSpentSec) / 3600)
-    : 0;
+  // Authoring pays a flat bounty per accepted task (the real work is off-platform,
+  // so the on-page timer can't measure it); everything else is time-based.
+  const amountCents = !completed
+    ? 0
+    : isAuthoring
+      ? project.payRateCents
+      : Math.round((project.payRateCents * clean.timeSpentSec) / 3600);
   const batchId = crypto.randomUUID();
 
   try {

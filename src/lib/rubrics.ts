@@ -221,3 +221,67 @@ export function codingKindFromTaskType(taskType: string): CodingKind | null {
 export function isCodingKind(kind: string): kind is CodingKind {
   return CODING_KINDS.includes(kind as CodingKind);
 }
+
+/* ─────────────────────── agentic task authoring ─────────────────────── */
+
+/**
+ * A "task" here is an off-platform authoring assignment: the trainer clones a
+ * repo, builds a hard terminal challenge, runs it, and opens a pull request.
+ * Trainway is only the structured submission — this config drives that form.
+ */
+
+export type Choice = { key: string; label: string };
+
+// "the main objects the agent must inspect or modify"
+export const AUTHORING_ARTIFACT_TYPES: Choice[] = [
+  { key: "source_code", label: "Source code" },
+  { key: "config", label: "Config / env files" },
+  { key: "logs", label: "Logs & traces" },
+  { key: "build_system", label: "Build system" },
+  { key: "tests", label: "Tests" },
+  { key: "data_files", label: "Data files" },
+  { key: "binaries", label: "Binaries / executables" },
+  { key: "database", label: "Databases" },
+  { key: "network", label: "Network services" },
+  { key: "shell_env", label: "Shell environment" },
+  { key: "docs", label: "Documentation" },
+];
+
+// "what the agent is ultimately being asked to accomplish"
+export const AUTHORING_OBJECTIVES: Choice[] = [
+  { key: "debug_repair", label: "Debug & repair a failure" },
+  { key: "implement", label: "Implement a feature" },
+  { key: "refactor", label: "Refactor" },
+  { key: "optimize", label: "Optimize performance" },
+  { key: "recover", label: "Recover corrupted state / data" },
+  { key: "configure", label: "Configure / set up an environment" },
+  { key: "reverse_engineer", label: "Reverse-engineer" },
+  { key: "migrate", label: "Migrate / upgrade" },
+  { key: "write_tests", label: "Write tests" },
+  { key: "reproduce", label: "Reproduce a bug" },
+  { key: "security", label: "Security hardening" },
+];
+
+export const AUTHORING_CONFIG = {
+  label: "Agentic Task Authoring",
+  // shown in the workspace instructions panel
+  blurb:
+    "This is a hands-on authoring task. The work happens on your own machine and on GitHub — clone the repository, build a hard, self-contained terminal challenge, run it until your verifier scores a solution pass/fail, then open a pull request. When your PR is up, come back here and record your submission below.",
+  // a screenshot of the pass@ run is required proof
+  requireScreenshot: true,
+  screenshotLabel: "pass@ results screenshot",
+  screenshotHint:
+    "Attach the pass@ results from your CI run (the automated checks on your pull request).",
+  notesMin: 0, // notes are optional here
+};
+
+// valid keys, for server-side sanitization of a submission
+export const AUTHORING_ARTIFACT_KEYS = AUTHORING_ARTIFACT_TYPES.map((c) => c.key);
+export const AUTHORING_OBJECTIVE_KEYS = AUTHORING_OBJECTIVES.map((c) => c.key);
+
+export function artifactLabel(key: string): string {
+  return AUTHORING_ARTIFACT_TYPES.find((c) => c.key === key)?.label ?? key;
+}
+export function objectiveLabel(key: string): string {
+  return AUTHORING_OBJECTIVES.find((c) => c.key === key)?.label ?? key;
+}

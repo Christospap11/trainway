@@ -98,6 +98,16 @@ export default async function AdminSubmissionsPage() {
                         ))}
                       </div>
                       <div className="mt-1 truncate text-sm">{it.prompt}</div>
+                      {it.link && (
+                        <a
+                          href={it.link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-0.5 block truncate text-xs text-primary hover:underline"
+                        >
+                          {it.link}
+                        </a>
+                      )}
                       {it.rationale && <div className="mt-0.5 truncate text-xs text-muted">“{it.rationale}”</div>}
 
                       {/* proof-of-run screenshots (private bucket, signed for 1h) */}

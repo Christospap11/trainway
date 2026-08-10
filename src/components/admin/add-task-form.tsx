@@ -14,7 +14,8 @@ export type Kind =
   | "CODE_GEN"
   | "CODE_REFACTOR"
   | "CODE_DEBUG"
-  | "CODE_REVIEW";
+  | "CODE_REVIEW"
+  | "AUTHORING";
 
 const KIND_LABELS: [Kind, string][] = [
   ["RATING", "Rating"],
@@ -24,6 +25,7 @@ const KIND_LABELS: [Kind, string][] = [
   ["CODE_REFACTOR", "Code refactoring"],
   ["CODE_DEBUG", "Code debugging"],
   ["CODE_REVIEW", "Code review"],
+  ["AUTHORING", "Agentic task authoring"],
 ];
 
 const CODING_KINDS: Kind[] = ["CODE_GEN", "CODE_REFACTOR", "CODE_DEBUG", "CODE_REVIEW"];
@@ -52,6 +54,9 @@ const CSV_TEMPLATES: Record<Kind, string> = {
   CODE_REVIEW:
     "prompt,language,code,ai_review,isGold,goldMin,goldMax\n" +
     '"Review this login handler.",python,"def login(u, p):\n    q = \\"SELECT * FROM users WHERE name = \'\\" + u + \\"\'\\"\n    return db.exec(q)","Looks good overall. Consider renaming `u` and `p` to `username` and `password` for readability.",TRUE,1,2\n',
+  AUTHORING:
+    "prompt,repo_url,category,sub_category\n" +
+    '"Author a hard, self-contained terminal task. Clone the repo, build the environment in /app so it runs reproducibly in a container, write a verifier that scores a solution pass/fail and can\'t be cheated, and include a reference solution that passes. Open a pull request when your checks are green.","https://github.com/your-org/authoring-starter-001","Debugging & repair","Root-cause analysis"\n',
 };
 
 export function AddTaskForm({
@@ -79,6 +84,10 @@ export function AddTaskForm({
   const [errorOutput, setErrorOutput] = useState("");
   const [aiResponse, setAiResponse] = useState("");
   const [aiReview, setAiReview] = useState("");
+  // authoring
+  const [repoUrl, setRepoUrl] = useState("");
+  const [category, setCategory] = useState("");
+  const [subCategory, setSubCategory] = useState("");
 
   const [isGold, setIsGold] = useState(false);
   const [goldMin, setGoldMin] = useState("1");
@@ -103,6 +112,9 @@ export function AddTaskForm({
     setErrorOutput("");
     setAiResponse("");
     setAiReview("");
+    setRepoUrl("");
+    setCategory("");
+    setSubCategory("");
     setIsGold(false);
   };
 
@@ -123,6 +135,9 @@ export function AddTaskForm({
       errorOutput,
       aiResponse,
       aiReview,
+      repoUrl,
+      category,
+      subCategory,
       isGold,
       goldMin: Number(goldMin),
       goldMax: Number(goldMax),
@@ -228,10 +243,45 @@ export function AddTaskForm({
 
           <div>
             <FieldLabel htmlFor="prompt">
-              {isCoding(kind) ? "Task / spec" : "Prompt"}
+              {kind === "AUTHORING" ? "Task brief" : isCoding(kind) ? "Task / spec" : "Prompt"}
             </FieldLabel>
-            <Textarea id="prompt" rows={2} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+            <Textarea
+              id="prompt"
+              rows={kind === "AUTHORING" ? 5 : 2}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+            />
           </div>
+
+          {kind === "AUTHORING" && (
+            <>
+              <div>
+                <FieldLabel htmlFor="repo">Repository URL (to clone)</FieldLabel>
+                <Input
+                  id="repo"
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  placeholder="https://github.com/your-org/authoring-starter-001"
+                  inputMode="url"
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <FieldLabel htmlFor="cat">Category (optional)</FieldLabel>
+                  <Input id="cat" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Debugging & repair" />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="subcat">Sub-category (optional)</FieldLabel>
+                  <Input id="subcat" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} placeholder="Root-cause analysis" />
+                </div>
+              </div>
+              <p className="rounded-lg border border-ink/10 bg-ink/[0.02] px-3 py-2 text-sm text-muted">
+                The trainer does this off-platform (clone → build → open a PR) and submits the PR
+                link, artifact types, objectives, a pass@ screenshot and score. Pay is the project&apos;s
+                flat bounty per accepted task — no gold key; you approve each one in review.
+              </p>
+            </>
+          )}
 
           {kind === "RATING" && (
             <div>
@@ -315,14 +365,14 @@ export function AddTaskForm({
             </>
           )}
 
-          {kind !== "WRITING" && (
+          {kind !== "WRITING" && kind !== "AUTHORING" && (
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={isGold} onChange={(e) => setIsGold(e.target.checked)} className="h-4 w-4 accent-[var(--primary)]" />
               Gold task (hidden QA check)
             </label>
           )}
 
-          {kind !== "WRITING" && isGold &&
+          {kind !== "WRITING" && kind !== "AUTHORING" && isGold &&
             (kind === "COMPARISON" ? (
               <div>
                 <FieldLabel htmlFor="gc">Correct choice</FieldLabel>

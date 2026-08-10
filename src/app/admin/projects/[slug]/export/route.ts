@@ -70,6 +70,8 @@ export async function GET(
     "code_overall",
     // coding self-reports
     "execution", "reproduced", "missed_issues", "screenshots",
+    // authoring
+    "repo_url", "pr_url", "artifact_types", "objectives", "pass_score",
     "feedback",
     "status", "earned_usd",
   ];
@@ -88,6 +90,10 @@ export async function GET(
       repro?: string;
       missed?: string[];
       screenshots?: string[];
+      prUrl?: string;
+      artifactTypes?: string[];
+      objectives?: string[];
+      passScore?: number;
     };
     const td = s.task.data as {
       response?: string;
@@ -101,6 +107,7 @@ export async function GET(
       errorOutput?: string;
       aiResponse?: string;
       aiReview?: string;
+      repoUrl?: string;
     };
     const cents = earnMap.get(s.batchId ?? "") ?? 0;
     // per-dimension rating; older single-rating submissions surface as `overall`
@@ -165,6 +172,12 @@ export async function GET(
         ans.repro ?? "",
         (ans.missed ?? []).join("; "),
         (ans.screenshots ?? []).join("; "),
+        // authoring
+        td.repoUrl ?? "",
+        ans.prUrl ?? "",
+        (ans.artifactTypes ?? []).join("; "),
+        (ans.objectives ?? []).join("; "),
+        s.task.kind === "AUTHORING" ? (ans.passScore ?? "") : "",
         ans.feedback ?? ans.rationale ?? "",
         s.status,
         (cents / 100).toFixed(2),
