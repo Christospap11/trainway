@@ -1,6 +1,6 @@
 # Deploying Trainway to Vercel
 
-The repo is private at **github.com/Christospap11/trainway** and builds clean.
+The repo lives at **github.com/Christospap11/trainway** and builds clean.
 Follow these steps once to go live.
 
 ## 0. (Recommended) Rotate the Supabase secrets first
@@ -40,8 +40,8 @@ Supabase → **Authentication → URL Configuration**:
 (Without this, email login/password-reset links won't work in production.)
 
 ## Logins
-- Admin: `admin@trainway.ai` / `REDACTED_ADMIN_PASSWORD`
-- Trainer: `demo@trainway.ai` / `REDACTED_DEMO_PASSWORD`
+- Admin: `admin@trainway.ai`, password from `SEED_ADMIN_PASSWORD`
+- Trainer: `demo@trainway.ai`, password from `SEED_DEMO_PASSWORD`
 
 ## Notes
 - `.env` and local reference docs are git-ignored — never commit real secrets.

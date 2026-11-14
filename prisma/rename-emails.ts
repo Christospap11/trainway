@@ -69,8 +69,8 @@ async function main() {
   }
 
   console.log("\nDone. New logins:");
-  console.log("  admin@trainway.ai / REDACTED_ADMIN_PASSWORD");
-  console.log("  demo@trainway.ai  / REDACTED_DEMO_PASSWORD");
+  console.log("  admin@trainway.ai (password: SEED_ADMIN_PASSWORD)");
+  console.log("  demo@trainway.ai  (password: SEED_DEMO_PASSWORD)");
 }
 
 main()

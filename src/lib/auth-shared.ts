@@ -10,5 +10,6 @@ export const SESSION_VALUE = "demo-trainer";
 
 export const DEMO_CREDENTIALS = {
   email: "demo@trainway.ai",
-  password: "REDACTED_DEMO_PASSWORD",
+  // Pre-fills the login form only when set; never hard-code a real password here.
+  password: process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? "",
 };

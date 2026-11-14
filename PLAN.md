@@ -2,7 +2,7 @@
 
 > **What we are:** A B2B "expert-in-the-loop" AI data company. We sell high-quality
 > training & evaluation data (Annotation, RLHF, Data Generation, Red Teaming, Coding)
-> to companies building AI. Founded by two developers — **the custom platform is our moat.**
+> to companies building AI. Built and owned by a solo developer — **the custom platform is our moat.**
 > **Wedge:** the Greek language + a premium global Coding division.
 > **Differentiator:** vetted domain experts, not random gig-workers; in-house QA.
 
@@ -114,7 +114,7 @@ task workspace). What's built so far is correct and stays.
   (aurora + neural-net background), recolorable brand tokens.
 - ✅ Marketing/recruitment site (trainer-facing) — correct as built.
 - ✅ Demo auth (cookie session, `proxy.ts` guard) + trainer dashboard
-  (Overview, Projects, Earnings, Profile) on mock data. Login: demo@trainway.ai / REDACTED_DEMO_PASSWORD.
+  (Overview, Projects, Earnings, Profile) on mock data. Login: demo@trainway.ai (password set via SEED_DEMO_PASSWORD).
 
 **Next big pieces (all freelancer-facing):**
 - ⬜ Align trainer dashboard task types to the four real products (Annotation/RLHF,

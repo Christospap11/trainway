@@ -26,9 +26,15 @@ const supabaseAdmin = createSupabaseClient(
   { auth: { autoRefreshToken: false, persistSession: false } },
 );
 
-const DEMO_PASSWORD = "REDACTED_DEMO_PASSWORD";
+const DEMO_PASSWORD = requireEnv("SEED_DEMO_PASSWORD");
 const ADMIN_EMAIL = "admin@trainway.ai";
-const ADMIN_PASSWORD = "REDACTED_ADMIN_PASSWORD";
+const ADMIN_PASSWORD = requireEnv("SEED_ADMIN_PASSWORD");
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Set ${name} in .env before seeding (see .env.example).`);
+  return value;
+}
 
 // Create a Supabase auth user (or find it if it already exists) and return its id.
 async function getOrCreateAuthUser(
